@@ -101,6 +101,7 @@ set(APP_SOURCES
     src/gui/gui_manager.cpp
     src/gui/pedal_board.cpp
     src/gui/pedal_widget.cpp
+    src/gui/file_dialog.cpp
 )
 
 # Windows resource file for app icon
@@ -129,7 +130,7 @@ target_link_libraries(guitar-amp PRIVATE
 )
 
 if(WIN32)
-    target_link_libraries(guitar-amp PRIVATE winmm ole32 setupapi)
+    target_link_libraries(guitar-amp PRIVATE winmm ole32 setupapi comdlg32 shell32)
     if(NOT MSVC)
         target_link_options(guitar-amp PRIVATE -mwindows)
     else()

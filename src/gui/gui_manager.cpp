@@ -1,6 +1,7 @@
 #include "gui/gui_manager.h"
 #include "gui/pedal_board.h"
 #include "gui/theme.h"
+#include "gui/file_dialog.h"
 
 #include <SDL.h>
 #include <SDL_opengl.h>
@@ -9,6 +10,7 @@
 #include <imgui_impl_opengl3.h>
 #include <iostream>
 #include <cstring>
+#include <cmath>
 
 #define NANOSVG_IMPLEMENTATION
 #include "nanosvg.h"
@@ -194,6 +196,9 @@ bool GuiManager::run_frame() {
     }
     if (show_load_preset_) {
         render_load_preset_popup();
+    }
+    if (show_recording_save_) {
+        render_recording_save_dialog();
     }
 
     // Rendering
@@ -585,47 +590,204 @@ void GuiManager::render_load_preset_popup() {
 }
 
 void GuiManager::render_recording_controls() {
-    ImGui::BeginChild("RecordingBar", ImVec2(0, 40), true);
-
     auto& rec = engine_.recorder();
     bool is_recording = rec.is_recording();
+    bool is_paused = rec.is_paused();
+    bool has_unsaved = rec.has_unsaved();
+
+    float panel_height = is_recording ? 120.0f : 40.0f;
+    ImGui::BeginChild("RecordingPanel", ImVec2(0, panel_height), true,
+                       ImGuiWindowFlags_NoScrollbar);
 
     if (is_recording) {
-        // Stop button (red)
+        // === RECORDING ACTIVE ===
+
+        // Top row: controls + timer
+        // Record/Pause button
+        if (is_paused) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.2f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
+            if (ImGui::Button("RESUME", ImVec2(80, 28))) {
+                rec.resume();
+            }
+            ImGui::PopStyleColor(2);
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.5f, 0.1f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.7f, 0.2f, 1.0f));
+            if (ImGui::Button("PAUSE", ImVec2(80, 28))) {
+                rec.pause();
+            }
+            ImGui::PopStyleColor(2);
+        }
+
+        ImGui::SameLine();
+
+        // Stop button
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.1f, 0.1f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));
-        if (ImGui::Button("STOP", ImVec2(80, 24))) {
+        if (ImGui::Button("STOP", ImVec2(80, 28))) {
             rec.stop();
             rec.write_metadata(rec.filepath(), engine_);
-            preset_status_msg_ = "Recording saved.";
+            show_recording_save_ = true;
+            recording_save_pending_ = true;
         }
         ImGui::PopStyleColor(2);
 
         ImGui::SameLine();
+
+        // Blinking REC indicator
         float t = static_cast<float>(ImGui::GetTime());
-        float blink = (std::sin(t * 3.0f) > 0.0f) ? 1.0f : 0.4f;
-        ImGui::TextColored(ImVec4(1.0f, 0.2f, 0.2f, blink), "REC");
+        if (is_paused) {
+            ImGui::TextColored(ImVec4(0.8f, 0.7f, 0.2f, 1.0f), "  PAUSED");
+        } else {
+            float blink = (std::sin(t * 4.0f) > 0.0f) ? 1.0f : 0.3f;
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.15f, 0.15f, blink));
+            ImGui::Text("  ●  REC");
+            ImGui::PopStyleColor();
+        }
+
         ImGui::SameLine();
-        ImGui::Text("%.1f s  |  %lld samples",
-                     rec.get_duration(),
-                     static_cast<long long>(rec.get_samples_written()));
+
+        // Timer MM:SS.ms
+        float duration = rec.get_duration();
+        int mins = static_cast<int>(duration) / 60;
+        int secs = static_cast<int>(duration) % 60;
+        int ms = static_cast<int>((duration - static_cast<int>(duration)) * 10);
+        ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.9f, 1.0f),
+                           "  %02d:%02d.%d", mins, secs, ms);
+
+        ImGui::SameLine();
+
+        // Peak meter (compact)
+        float peak = rec.get_current_peak();
+        ImGui::TextColored(peak > 0.9f ? ImVec4(1, 0.2f, 0.2f, 1) :
+                           peak > 0.6f ? ImVec4(1, 0.8f, 0.2f, 1) :
+                                         ImVec4(0.2f, 0.8f, 0.2f, 1),
+                           "  Peak: %.1f dB",
+                           peak > 0.0001f ? 20.0f * std::log10(peak) : -96.0f);
+
+        ImGui::SameLine(ImGui::GetContentRegionAvail().x - 120);
+        int64_t file_bytes = rec.get_samples_written() * 2; // 16-bit PCM
+        if (file_bytes > 1024 * 1024)
+            ImGui::Text("%.1f MB", file_bytes / (1024.0f * 1024.0f));
+        else
+            ImGui::Text("%.0f KB", file_bytes / 1024.0f);
+
+        // === WAVEFORM DISPLAY ===
+        ImGui::Spacing();
+        rec.get_waveform(rec_waveform_buf_, Recorder::WAVEFORM_SIZE);
+
+        ImVec2 wave_pos = ImGui::GetCursorScreenPos();
+        float wave_w = ImGui::GetContentRegionAvail().x;
+        float wave_h = 50.0f;
+
+        ImDrawList* draw = ImGui::GetWindowDrawList();
+
+        // Dark background for waveform
+        draw->AddRectFilled(wave_pos,
+                            ImVec2(wave_pos.x + wave_w, wave_pos.y + wave_h),
+                            IM_COL32(20, 18, 16, 255), 4.0f);
+
+        // Center line
+        float center_y = wave_pos.y + wave_h * 0.5f;
+        draw->AddLine(ImVec2(wave_pos.x, center_y),
+                      ImVec2(wave_pos.x + wave_w, center_y),
+                      IM_COL32(60, 55, 48, 255));
+
+        // Waveform bars (mirrored around center)
+        ImU32 wave_color = is_paused ? IM_COL32(180, 160, 50, 200)
+                                      : IM_COL32(200, 80, 60, 220);
+        ImU32 wave_color_bright = is_paused ? IM_COL32(220, 200, 80, 255)
+                                             : IM_COL32(255, 100, 70, 255);
+
+        int num_bars = static_cast<int>(wave_w);
+        float samples_per_pixel = static_cast<float>(Recorder::WAVEFORM_SIZE) / num_bars;
+
+        for (int i = 0; i < num_bars; ++i) {
+            int idx = static_cast<int>(i * samples_per_pixel);
+            if (idx >= Recorder::WAVEFORM_SIZE) idx = Recorder::WAVEFORM_SIZE - 1;
+            float val = rec_waveform_buf_[idx];
+            float bar_h = val * wave_h * 0.48f;
+            if (bar_h < 0.5f) continue;
+
+            float x = wave_pos.x + i;
+            ImU32 col = val > 0.8f ? wave_color_bright : wave_color;
+            draw->AddLine(ImVec2(x, center_y - bar_h),
+                          ImVec2(x, center_y + bar_h), col);
+        }
+
+        // Border
+        draw->AddRect(wave_pos,
+                      ImVec2(wave_pos.x + wave_w, wave_pos.y + wave_h),
+                      IM_COL32(70, 65, 55, 255), 4.0f);
+
+        ImGui::Dummy(ImVec2(wave_w, wave_h));
+
+    } else if (has_unsaved) {
+        // === UNSAVED RECORDING ===
+        ImGui::TextColored(Theme::Gold(), "Recording complete");
+        ImGui::SameLine();
+        ImGui::Text("  %.1f s  |  ", rec.get_duration());
+        ImGui::SameLine();
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.2f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
+        if (ImGui::Button("Save As...", ImVec2(100, 24))) {
+            show_recording_save_ = true;
+            recording_save_pending_ = true;
+        }
+        ImGui::PopStyleColor(2);
+
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.4f, 0.1f, 0.1f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.6f, 0.15f, 0.15f, 1.0f));
+        if (ImGui::Button("Discard", ImVec2(80, 24))) {
+            rec.discard();
+            preset_status_msg_ = "Recording discarded.";
+        }
+        ImGui::PopStyleColor(2);
+
     } else {
-        // Record button (dark red)
+        // === READY STATE ===
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.05f, 0.05f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.1f, 0.1f, 1.0f));
-        if (ImGui::Button("REC", ImVec2(80, 24))) {
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.9f, 0.15f, 0.15f, 1.0f));
+        if (ImGui::Button("●  REC", ImVec2(90, 28))) {
             std::string filepath = Recorder::generate_filename();
             rec.start(filepath, engine_.get_sample_rate());
         }
-        ImGui::PopStyleColor(2);
+        ImGui::PopStyleColor(3);
 
         ImGui::SameLine();
-        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Ready to record");
-        ImGui::SameLine();
-        ImGui::Text("  |  Output: %s/", Recorder::get_recordings_dir().c_str());
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f),
+                           "  Ready to record  |  WAV 16-bit %d Hz",
+                           engine_.get_sample_rate());
     }
 
     ImGui::EndChild();
+}
+
+void GuiManager::render_recording_save_dialog() {
+    if (!recording_save_pending_) {
+        show_recording_save_ = false;
+        return;
+    }
+
+    // Launch native save dialog (runs on this frame, blocks briefly)
+    recording_save_pending_ = false;
+    show_recording_save_ = false;
+
+    auto& rec = engine_.recorder();
+    std::string dest = show_save_dialog("recording.wav", "WAV Audio", "wav");
+
+    if (!dest.empty()) {
+        if (rec.save_to(dest)) {
+            preset_status_msg_ = "Saved: " + dest;
+        } else {
+            preset_status_msg_ = "Failed to save recording.";
+        }
+    }
+    // If cancelled, keep as unsaved — user can save later or discard
 }
 
 } // namespace GuitarAmp

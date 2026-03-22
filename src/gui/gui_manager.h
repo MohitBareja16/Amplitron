@@ -28,6 +28,7 @@ private:
     void render_save_preset_popup();
     void render_load_preset_popup();
     void render_recording_controls();
+    void render_recording_save_dialog();
 
     AudioEngine& engine_;
     SDL_Window* window_ = nullptr;
@@ -50,6 +51,11 @@ private:
     // Smoothed meter values
     float smoothed_input_level_ = 0.0f;
     float smoothed_output_level_ = 0.0f;
+
+    // Recording UI state
+    bool show_recording_save_ = false;
+    bool recording_save_pending_ = false;
+    float rec_waveform_buf_[512] = {};
 };
 
 } // namespace GuitarAmp

@@ -4,6 +4,8 @@
 #include <sstream>
 #include <ctime>
 #include <cstring>
+#include <cstdio>
+#include <cmath>
 
 #ifdef _WIN32
 #include <direct.h>
@@ -15,7 +17,9 @@
 
 namespace GuitarAmp {
 
-Recorder::Recorder() = default;
+Recorder::Recorder() {
+    for (auto& v : waveform_buf_) v.store(0.0f);
+}
 
 Recorder::~Recorder() {
     if (recording_) stop();
@@ -41,6 +45,18 @@ bool Recorder::start(const std::string& filepath, int sample_rate, int channels)
     sample_rate_ = sample_rate;
     channels_ = channels;
     samples_written_ = 0;
+    paused_ = false;
+    has_unsaved_ = false;
+    pause_duration_ = 0.0f;
+
+    // Reset waveform buffer
+    for (auto& v : waveform_buf_) v.store(0.0f);
+    waveform_write_pos_ = 0;
+    current_peak_ = 0.0f;
+    bin_sample_count_ = 0;
+    bin_peak_ = 0.0f;
+    // ~60 waveform updates per second (at 48kHz, ~800 samples per bin)
+    samples_per_bin_ = std::max(1, sample_rate / (WAVEFORM_SIZE * 2));
 
     file_.open(filepath, std::ios::binary);
     if (!file_.is_open()) {
@@ -59,17 +75,74 @@ bool Recorder::start(const std::string& filepath, int sample_rate, int channels)
 void Recorder::stop() {
     if (!recording_) return;
     recording_ = false;
+    paused_ = false;
 
     finalize_wav_header();
     file_.close();
+
+    has_unsaved_ = true;
 
     float dur = get_duration();
     std::cout << "Recording stopped: " << samples_written_.load() << " samples ("
               << dur << "s) saved to " << filepath_ << std::endl;
 }
 
+void Recorder::pause() {
+    if (!recording_ || paused_) return;
+    paused_ = true;
+    pause_start_ = std::chrono::steady_clock::now();
+}
+
+void Recorder::resume() {
+    if (!recording_ || !paused_) return;
+    auto now = std::chrono::steady_clock::now();
+    float elapsed = std::chrono::duration<float>(now - pause_start_).count();
+    pause_duration_.store(pause_duration_.load() + elapsed);
+    paused_ = false;
+}
+
+bool Recorder::save_to(const std::string& dest_path) {
+    if (!has_unsaved_) return false;
+    if (filepath_ == dest_path) {
+        has_unsaved_ = false;
+        return true;
+    }
+    // Copy file to destination
+    std::ifstream src(filepath_, std::ios::binary);
+    std::ofstream dst(dest_path, std::ios::binary);
+    if (!src.is_open() || !dst.is_open()) return false;
+    dst << src.rdbuf();
+    src.close();
+    dst.close();
+    // Remove temp file
+    std::remove(filepath_.c_str());
+    // Remove metadata sidecar if exists
+    std::string meta = filepath_;
+    size_t dot = meta.rfind('.');
+    if (dot != std::string::npos) meta = meta.substr(0, dot);
+    meta += ".meta.json";
+    std::remove(meta.c_str());
+    filepath_ = dest_path;
+    has_unsaved_ = false;
+    return true;
+}
+
+void Recorder::discard() {
+    if (!has_unsaved_ && !recording_) return;
+    if (recording_) stop();
+    std::remove(filepath_.c_str());
+    // Remove metadata sidecar if exists
+    std::string meta = filepath_;
+    size_t dot = meta.rfind('.');
+    if (dot != std::string::npos) meta = meta.substr(0, dot);
+    meta += ".meta.json";
+    std::remove(meta.c_str());
+    has_unsaved_ = false;
+    filepath_.clear();
+}
+
 void Recorder::write_samples(const float* buffer, int num_samples) {
-    if (!recording_) return;
+    if (!recording_ || paused_) return;
 
     // Convert float32 to int16 PCM for WAV
     std::vector<int16_t> pcm(num_samples * channels_);
@@ -83,6 +156,29 @@ void Recorder::write_samples(const float* buffer, int num_samples) {
     file_.write(reinterpret_cast<const char*>(pcm.data()),
                 pcm.size() * sizeof(int16_t));
     samples_written_ += num_samples;
+
+    // Update waveform ring buffer (lock-free)
+    for (int i = 0; i < num_samples; ++i) {
+        float abs_val = std::fabs(buffer[i]);
+        if (abs_val > bin_peak_) bin_peak_ = abs_val;
+        bin_sample_count_++;
+        if (bin_sample_count_ >= samples_per_bin_) {
+            int pos = waveform_write_pos_.load() % WAVEFORM_SIZE;
+            waveform_buf_[pos].store(bin_peak_);
+            waveform_write_pos_.store(pos + 1);
+            current_peak_.store(bin_peak_);
+            bin_peak_ = 0.0f;
+            bin_sample_count_ = 0;
+        }
+    }
+}
+
+void Recorder::get_waveform(float* out, int count) const {
+    int wp = waveform_write_pos_.load();
+    for (int i = 0; i < count; ++i) {
+        int idx = (wp - count + i + WAVEFORM_SIZE * 2) % WAVEFORM_SIZE;
+        out[i] = waveform_buf_[idx].load();
+    }
 }
 
 float Recorder::get_duration() const {
