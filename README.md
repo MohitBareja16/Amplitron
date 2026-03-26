@@ -7,6 +7,8 @@
 
 Professional real-time guitar amplifier simulator with ultra-low latency, 9 studio-quality effects, and a beautiful visual pedal board interface. Built in C++17 with PortAudio, SDL2, and Dear ImGui.
 
+<a href="https://www.producthunt.com/products/amplitron?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-amplitron" target="_blank" rel="noopener noreferrer"><img alt="Amplitron - Poor man's guitar amp | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1105240&amp;theme=light&amp;t=1774378395088"></a>
+
 **[Download Latest Release](https://github.com/sudip-mondal-2002/Amplitron/releases/latest)** | **[Visit Website](https://sudip-mondal-2002.github.io/Amplitron/)**
 
 Transform your computer into a complete guitar rig. Plug in your guitar via USB audio interface or guitar cable, and get instant access to professional amp simulation with studio-quality effects — all with imperceptible latency.
