@@ -1463,7 +1463,8 @@ void GuiManager::check_for_updates() {
                 }
             }
 
-            if (latest_version != "v0.1.49" && !latest_version.empty()) {
+            std::string current_version = "v" AMPLITRON_VERSION;
+            if (latest_version != current_version && !latest_version.empty()) {
                 std::lock_guard<std::mutex> lock(update_mutex_);
                 new_release_version_ = latest_version;
                 new_release_url_ = html_url;

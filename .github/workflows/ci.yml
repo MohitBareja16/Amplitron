@@ -41,10 +41,16 @@ jobs:
         curl -sL -o external/nanosvgrast.h https://raw.githubusercontent.com/memononen/nanosvg/master/src/nanosvgrast.h &
         wait
 
+    - name: Generate Version
+      id: version
+      run: |
+        COUNT=$(git rev-list --count HEAD)
+        echo "version=0.1.${COUNT}" >> $GITHUB_OUTPUT
+
     - name: Build
       run: |
         mkdir -p build && cd build
-        cmake -DCMAKE_BUILD_TYPE=Release ..
+        cmake -DCMAKE_BUILD_TYPE=Release -DAMPLITRON_VERSION="${{ steps.version.outputs.version }}" ..
         make -j$(nproc)
 
     - name: Run Tests
@@ -74,11 +80,18 @@ jobs:
         curl -sL -o external/nanosvgrast.h https://raw.githubusercontent.com/memononen/nanosvg/master/src/nanosvgrast.h &
         wait
 
+    - name: Generate Version
+      id: version
+      run: |
+        COUNT=$(git rev-list --count HEAD)
+        echo "version=0.1.${COUNT}" >> $GITHUB_OUTPUT
+
     - name: Build
       run: |
         HOMEBREW_PREFIX=$(brew --prefix)
         mkdir -p build && cd build
         cmake -DCMAKE_BUILD_TYPE=Release \
+          -DAMPLITRON_VERSION="${{ steps.version.outputs.version }}" \
           -DPORTAUDIO_INCLUDE_DIRS="$HOMEBREW_PREFIX/include" \
           -DPORTAUDIO_LIBRARIES="$HOMEBREW_PREFIX/lib/libportaudio.dylib" \
           -DSDL2_INCLUDE_DIRS="$HOMEBREW_PREFIX/include/SDL2" \
@@ -200,11 +213,17 @@ jobs:
         curl -sL -o external/nanosvgrast.h https://raw.githubusercontent.com/memononen/nanosvg/master/src/nanosvgrast.h &
         wait
 
+    - name: Generate Version
+      id: version
+      run: |
+        COUNT=$(git rev-list --count HEAD)
+        echo "version=0.1.${COUNT}" >> $GITHUB_OUTPUT
+
     - name: Build WASM
       run: |
         source emsdk/emsdk_env.sh
         mkdir -p build-web && cd build-web
-        emcmake cmake -DCMAKE_BUILD_TYPE=Release ..
+        emcmake cmake -DCMAKE_BUILD_TYPE=Release -DAMPLITRON_VERSION="${{ steps.version.outputs.version }}" ..
         emmake make -j$(nproc)
 
     - name: Upload Web Build
@@ -259,6 +278,13 @@ jobs:
         curl -sL -o external/nanosvgrast.h https://raw.githubusercontent.com/memononen/nanosvg/master/src/nanosvgrast.h &
         wait
 
+    - name: Generate Version
+      shell: msys2 {0}
+      id: version
+      run: |
+        COUNT=$(git rev-list --count HEAD)
+        echo "version=0.1.${COUNT}" >> $GITHUB_OUTPUT
+
     - name: Build
       shell: msys2 {0}
       run: |
@@ -266,6 +292,7 @@ jobs:
         export CCACHE_MAXSIZE=200M
         mkdir -p build && cd build
         cmake -G Ninja -DCMAKE_BUILD_TYPE=Release \
+          -DAMPLITRON_VERSION="${{ steps.version.outputs.version }}" \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
           ..

@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(GuitarAmp VERSION 1.0.0 LANGUAGES CXX C)
 
+set(AMPLITRON_VERSION "0.0.0" CACHE STRING "Application version (set by CI)")
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -139,7 +141,7 @@ if(EMSCRIPTEN)
     )
 
     # OpenGL ES 3 for ImGui's OpenGL3 backend on WebGL 2
-    target_compile_definitions(guitar-amp PRIVATE IMGUI_IMPL_OPENGL_ES3)
+    target_compile_definitions(guitar-amp PRIVATE IMGUI_IMPL_OPENGL_ES3 AMPLITRON_VERSION="${AMPLITRON_VERSION}")
 
     # Emscripten linker flags for Web Audio + AudioWorklet + SharedArrayBuffer
     target_link_options(guitar-amp PRIVATE
@@ -195,6 +197,8 @@ else() # NOT EMSCRIPTEN
         ${SDL2_INCLUDE_DIRS}
         ${OPENGL_INCLUDE_DIR}
     )
+
+    target_compile_definitions(guitar-amp PRIVATE AMPLITRON_VERSION="${AMPLITRON_VERSION}")
 
     target_link_libraries(guitar-amp PRIVATE
         ${PORTAUDIO_LIBRARIES}
