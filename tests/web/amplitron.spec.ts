@@ -61,8 +61,9 @@ test.describe('Page Load & WASM Initialisation', () => {
   });
 
   test('loading overlay is visible on initial page load', async ({ page }) => {
-    // Intercept before DOMContentLoaded by attaching the handler first
-    await page.goto('/');
+    // Only wait for DOMContentLoaded — WASM initialises asynchronously after
+    // that, so the overlay must still be visible at this point.
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     const loading = page.locator('#loading');
     // The overlay should exist
