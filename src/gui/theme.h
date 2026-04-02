@@ -3,6 +3,8 @@
 #include <imgui.h>
 #include <cstring>
 #include <cmath>
+#include <cstdio>
+#include <string>
 
 namespace GuitarAmp {
 
@@ -77,9 +79,10 @@ constexpr ImU32 PEDAL_BORDER   = IM_COL32(70, 66, 58, 255);    // warm grey
 constexpr ImU32 PEDAL_PLATE    = IM_COL32(46, 42, 36, 200);    // top plate
 constexpr ImU32 SWITCH_BODY    = IM_COL32(38, 36, 32, 255);
 constexpr ImU32 SWITCH_RING    = IM_COL32(68, 64, 56, 255);
-constexpr ImU32 SWITCH_ACTIVE  = IM_COL32(58, 56, 50, 255);
-constexpr ImU32 SWITCH_IDLE    = IM_COL32(42, 40, 36, 255);
+constexpr ImU32 SWITCH_ACTIVE  = IM_COL32(72, 65, 42, 255);    // gold-tinted = enabled
+constexpr ImU32 SWITCH_IDLE    = IM_COL32(28, 26, 22, 255);    // dark = bypassed
 constexpr ImU32 LED_OFF        = IM_COL32(36, 34, 30, 255);
+constexpr ImU32 PEDAL_BYPASS_OVERLAY = IM_COL32(0, 0, 0, 90);  // dim overlay when bypassed
 
 // --- ImVec4 helpers (for ImGui style and TextColored) ---
 inline ImVec4 Gold()          { return ImVec4(0.78f, 0.66f, 0.29f, 1.0f); }
@@ -95,11 +98,46 @@ inline ImVec4 RecBlink(float t) {
     return ImVec4(1.0f, 0.1f, 0.1f, a);
 }
 
+// --- Parameter value formatter ---
+// Produces human-readable display strings with unit-aware formatting:
+//   Hz  -> "440 Hz" or "1.5 kHz" (>=1000)
+//   dB  -> "-6.0 dB"
+//   %   -> "75%"
+//   ms  -> "250 ms"
+//   s   -> "1.20 s"
+//   other / none -> "1.5" or "1.5 unit"
+inline std::string formatParameterValue(float value, const std::string& unit) {
+    char buf[64];
+    if (unit == "Hz") {
+        if (value >= 1000.0f)
+            snprintf(buf, sizeof(buf), "%.1f kHz", value / 1000.0f);
+        else
+            snprintf(buf, sizeof(buf), "%.0f Hz", value);
+    } else if (unit == "dB") {
+        snprintf(buf, sizeof(buf), "%.1f dB", value);
+    } else if (unit == "%" || unit == "pct") {
+        snprintf(buf, sizeof(buf), "%.0f%%", value);
+    } else if (unit == "ms") {
+        snprintf(buf, sizeof(buf), "%.1f ms", value);
+    } else if (unit == "s") {
+        snprintf(buf, sizeof(buf), "%.2f s", value);
+    } else if (!unit.empty()) {
+        snprintf(buf, sizeof(buf), "%.1f %s", value, unit.c_str());
+    } else {
+        snprintf(buf, sizeof(buf), "%.1f", value);
+    }
+    return std::string(buf);
+}
+
 // --- Spacing / Layout ---
-constexpr float PEDAL_WIDTH   = 190.0f;
-constexpr float PEDAL_HEIGHT  = 340.0f;
-constexpr float KNOB_RADIUS   = 20.0f;
-constexpr float KNOB_HIT_MULT = 2.2f;
+constexpr float PEDAL_WIDTH         = 190.0f;
+constexpr float PEDAL_HEIGHT        = 340.0f;
+constexpr float KNOB_RADIUS         = 20.0f;
+constexpr float KNOB_HIT_MULT       = 2.2f;
+constexpr float KNOB_SPACING_X      = 85.0f;   // horizontal distance between knob columns
+constexpr float KNOB_SPACING_Y      = 72.0f;   // vertical distance between knob rows
+constexpr float KNOB_Y_START        = 55.0f;   // knob area top offset from pedal top
+constexpr float SWITCH_BOTTOM_OFFSET = 55.0f;  // footswitch distance from pedal bottom
 constexpr float ROUNDING_SM   = 4.0f;
 constexpr float ROUNDING_MD   = 8.0f;
 constexpr float ROUNDING_LG   = 12.0f;

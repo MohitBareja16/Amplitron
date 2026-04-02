@@ -10,7 +10,7 @@ This document explains the CI/CD pipeline and how to create releases.
 
 **What it does**:
 - Builds Amplitron on Windows, macOS, Linux, and Web (Emscripten)
-- Runs the full test suite (64+ tests) on all native platforms
+- Runs the full test suite (105+ tests) on all native platforms
 - Generates semantic version (`0.1.<commit_count>`)
 - Caches dependencies (apt packages, Emscripten SDK, ccache)
 - Uploads build artifacts (1-day retention)
@@ -66,7 +66,7 @@ git push origin main
 
 GitHub Actions will automatically:
 - ✅ Build for all platforms (Windows, macOS, Linux, Web)
-- ✅ Run tests (64+ tests)
+- ✅ Run tests (105+ tests)
 - ✅ Create the release with semantic version
 - ✅ Package platform-specific installers
 - ✅ Upload binaries to the release

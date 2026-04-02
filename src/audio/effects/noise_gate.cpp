@@ -1,6 +1,9 @@
 #include "audio/effects/noise_gate.h"
+#include "audio/effect_factory.h"
 
 namespace GuitarAmp {
+
+static EffectRegistrar<NoiseGate> reg("Noise Gate");
 
 NoiseGate::NoiseGate() {
     params_ = {
@@ -8,35 +11,27 @@ NoiseGate::NoiseGate() {
         {"Attack",     0.5f,   0.1f,  10.0f, 0.5f,  "ms", "How quickly the gate opens when the signal exceeds the threshold. Fast attack preserves pick transients."},
         {"Release",   50.0f,   5.0f, 500.0f, 50.0f,  "ms", "How quickly the gate closes after the signal falls below threshold. Longer release preserves sustained notes."},
     };
-    update_coefficients();
-}
-
-void NoiseGate::update_coefficients() {
-    float attack_ms = params_[1].value;
-    float release_ms = params_[2].value;
-    attack_coeff_ = std::exp(-1.0f / (sample_rate_ * attack_ms * 0.001f));
-    release_coeff_ = std::exp(-1.0f / (sample_rate_ * release_ms * 0.001f));
 }
 
 void NoiseGate::process(float* buffer, int num_samples) {
     if (!enabled_) return;
 
     float threshold = db_to_linear(params_[0].value);
-    update_coefficients();
+    float attack_coeff = EnvelopeFollower::time_to_coeff(params_[1].value, sample_rate_);
+    float release_coeff = EnvelopeFollower::time_to_coeff(params_[2].value, sample_rate_);
 
     for (int i = 0; i < num_samples; ++i) {
-        float abs_sample = std::fabs(buffer[i]);
-        float coeff = (abs_sample > envelope_) ? attack_coeff_ : release_coeff_;
-        envelope_ = coeff * envelope_ + (1.0f - coeff) * abs_sample;
+        float envelope = env_.process(buffer[i], attack_coeff, release_coeff);
 
-        float target_gain = (envelope_ > threshold) ? 1.0f : 0.0f;
-        gain_ += (target_gain - gain_) * 0.01f;
+        float target_gain = (envelope > threshold) ? 1.0f : 0.0f;
+        float gain_coeff = (target_gain > gain_) ? attack_coeff : release_coeff;
+        gain_ += (target_gain - gain_) * (1.0f - gain_coeff);
         buffer[i] *= gain_;
     }
 }
 
 void NoiseGate::reset() {
-    envelope_ = 0.0f;
+    env_.reset();
     gain_ = 0.0f;
 }
 

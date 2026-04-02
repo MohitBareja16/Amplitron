@@ -60,28 +60,6 @@
       }
     },
     {
-      "type": "Amp Sim",
-      "enabled": true,
-      "mix": 1.0,
-      "params": {
-        "Model": 1.0,
-        "Gain": 0.65,
-        "Bass": -1.0,
-        "Mid": 2.5,
-        "Treble": 1.0,
-        "Level": 0.7
-      }
-    },
-    {
-      "type": "Cabinet",
-      "enabled": true,
-      "mix": 1.0,
-      "params": {
-        "Type": 1.0,
-        "Bright": 0.5
-      }
-    },
-    {
       "type": "Chorus",
       "enabled": false,
       "mix": 1.0,
@@ -110,6 +88,19 @@
         "Decay": 0.4,
         "Damp": 0.5,
         "Level": 0.2
+      }
+    },
+    {
+      "type": "Amp Sim",
+      "enabled": true,
+      "mix": 1.0,
+      "params": {
+        "Model": 1.0,
+        "Gain": 0.65,
+        "Bass": -1.0,
+        "Mid": 2.5,
+        "Treble": 1.0,
+        "Level": 0.7
       }
     }
   ]

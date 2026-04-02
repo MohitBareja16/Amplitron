@@ -44,6 +44,7 @@ public:
     bool has_unsaved() const { return has_unsaved_.load(); }
     float get_duration() const;
     int64_t get_samples_written() const { return samples_written_.load(); }
+    int get_channels() const { return channels_; }
     const std::string& filepath() const { return filepath_; }
 
     // Waveform visualization data (lock-free ring buffer of peak values)

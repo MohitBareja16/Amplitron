@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/sudip-mondal-2002/Amplitron/releases)
 
-Professional real-time guitar amplifier simulator with ultra-low latency, 11 studio-quality effects, and a beautiful visual pedal board interface. Available as a native desktop app and a browser-based web demo. Built in C++17 with PortAudio, SDL2, and Dear ImGui.
+Professional real-time guitar amplifier simulator with ultra-low latency, 12 studio-quality effects, and a beautiful visual pedal board interface. Available as a native desktop app and a browser-based web demo. Built in C++17 with PortAudio, SDL2, and Dear ImGui.
 
 <a href="https://www.producthunt.com/products/amplitron?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-amplitron" target="_blank" rel="noopener noreferrer"><img alt="Amplitron - Poor man's guitar amp | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1105240&amp;theme=light&amp;t=1774378395088"></a>
 
@@ -39,6 +39,7 @@ Transform your computer into a complete guitar rig. Plug in your guitar via USB 
 | **Chorus** | LFO-modulated delay with rate and depth controls |
 | **Delay** | Up to 2 seconds, with feedback tone filtering |
 | **Reverb** | Schroeder reverb (4 comb + 2 allpass filters) with decay and damping |
+| **Wah** | State-variable filter wah with manual sweep and auto-wah (envelope follower) modes |
 
 ### Utilities
 | Tool | Description |
@@ -235,6 +236,8 @@ Input → Noise Gate* → Compressor* → Overdrive* → Distortion* → EQ → 
 ```
 (*bypassed by default — click the footswitch to enable)
 
+AmpSimulator and Wah are available via **+ Add Pedal** and can be inserted anywhere in the chain.
+
 You can remove any pedal and add new ones in any order.
 
 ---
@@ -293,7 +296,8 @@ Amplitron/
 │   │       ├── chorus.*           # Chorus modulation
 │   │       ├── delay.*            # Digital delay with feedback
 │   │       ├── reverb.*           # Schroeder reverb
-│   │       └── tuner.*            # Chromatic tuner (YIN algorithm)
+│   │       ├── tuner.*            # Chromatic tuner (YIN algorithm)
+│   │       └── wah.*              # Wah (manual sweep + auto-wah)
 │   └── gui/
 │       ├── gui_manager.h/cpp      # Window, ImGui, main render loop
 │       ├── pedal_board.h/cpp      # Pedal chain management UI
@@ -306,15 +310,17 @@ Amplitron/
 │       ├── file_dialog.h/cpp      # File dialog interface
 │       ├── file_dialog_native.cpp # Native file dialogs
 │       └── file_dialog_web.cpp    # Web-based file dialogs
-├── tests/                         # 64+ test suite
+├── tests/                         # 105+ test suite
 │   ├── test_framework.h           # Minimal test framework
 │   ├── test_main.cpp
 │   ├── test_common.cpp            # Utility function tests
-│   ├── test_effects.cpp           # All effects tested
+│   ├── test_effects.cpp           # All effects tested (including Wah)
 │   ├── test_preset_manager.cpp    # Preset I/O tests
 │   ├── test_recorder.cpp          # WAV recording tests
 │   ├── test_theme.cpp             # Color system tests
-│   └── test_command_history.cpp   # Undo/redo tests
+│   ├── test_command_history.cpp   # Undo/redo tests
+│   └── web/
+│       └── amplitron.spec.ts      # Playwright end-to-end web demo tests
 └── web/
     ├── shell.html                 # Emscripten shell template
     └── coi-serviceworker.js       # SharedArrayBuffer support
@@ -414,13 +420,14 @@ cd build
 ./amplitron-tests.exe    # Windows
 ```
 
-The test suite includes 64+ tests covering:
+The test suite includes 105+ tests covering:
 - Core utility functions
-- All 11 audio effects (including amp simulator and tuner)
+- All 12 audio effects (including amp simulator, wah, and tuner)
 - Preset save/load/roundtrip
 - WAV recording
 - Theme and color system
 - Undo/redo command history
+- End-to-end web demo tests (Playwright, in `tests/web/`)
 
 ### CI/CD Pipeline
 
@@ -428,7 +435,7 @@ Amplitron uses GitHub Actions for continuous integration and deployment:
 
 - **CI Workflow** (`.github/workflows/ci.yml`): Runs on every push to `main`/`develop` and PRs to `develop`
   - Builds on Windows (MSYS2/MinGW64), macOS (Homebrew), Linux (Ubuntu), and Web (Emscripten)
-  - Runs full test suite (64+ tests) on all native platforms
+  - Runs full test suite (105+ tests) on all native platforms
   - Generates semantic version (`0.1.<commit_count>`)
   - Uses dependency caching (apt, Emscripten SDK, ccache)
   - Uploads build artifacts (1-day retention)
@@ -445,7 +452,7 @@ Amplitron uses GitHub Actions for continuous integration and deployment:
 
 Every push to `main` automatically:
 - Builds for Windows, macOS, Linux, and Web (Emscripten)
-- Runs the full test suite (64+ tests)
+- Runs the full test suite (105+ tests)
 - Creates a new release with version `v0.1.<commit_count>`
 - Uploads platform installers to the release
 - Deploys the download page and web demo to GitHub Pages

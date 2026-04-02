@@ -1,6 +1,9 @@
 #include "audio/effects/cabinet_sim.h"
+#include "audio/effect_factory.h"
 
 namespace GuitarAmp {
+
+static EffectRegistrar<CabinetSim> reg("Cabinet");
 
 CabinetSim::CabinetSim() {
     params_ = {

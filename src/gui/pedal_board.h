@@ -31,14 +31,13 @@ public:
     /** @brief Render the toolbar and signal chain each frame. */
     void render();
 
-    /** @brief Recreate PedalWidget instances from the current engine effect list. */
+    /** @brief Recreate PedalWidget instances from the current engine effect list.
+     *  Preserves visibility of effects already on the board by tracking effect pointer
+     *  identity; new effects (e.g. after preset load or add) are shown only if enabled. */
     void rebuild_widgets();
 
     /** @brief Whether only enabled pedals are shown (default true). */
     bool show_active_only() const { return show_active_only_; }
-
-    /** @brief Update which pedals are visible based on current state. */
-    void update_visible_pedals();
 
 private:
     /** @brief Render the "+ Add Pedal" button and its popup menu. */

@@ -72,7 +72,10 @@ Each effect pedal in Amplitron acts as an independent DSP processing agent. They
 * **`Delay` (The Echo Agent):** A digital ring-buffer agent that captures the signal and repeats it at specific time intervals. It manages an internal feedback loop, feeding a percentage of the output back into its input to create decaying echoes.
 * **`Reverb` (The Spatial Agent):** Utilizes Schroeder reverb architecture. This complex agent runs 4 parallel comb filters feeding into 2 series allpass filters to simulate the thousands of overlapping acoustic reflections found in physical spaces (rooms, halls, caves).
 
-### 2.5 Utility Agents
+### 2.5 Modulation & Filter Agents
+* **`WahPedal` (The Wah Agent):** A state-variable filter (Chamberlin SVF topology) wah effect with two operating modes. In **Manual** mode, the `Sweep` parameter controls the filter's centre frequency directly (heel-down = low, toe-down = high). In **Auto-wah** mode, an internal envelope follower tracks input amplitude and drives the sweep automatically according to `Sensitivity`, `Attack`, and `Release` parameters. One-pole smoothing is applied to both the sweep position and Q value to eliminate zipper noise on rapid knob moves. Uses `try_lock` for non-blocking parameter snapshots in the audio thread.
+
+### 2.6 Utility Agents
 * **`TunerPedal` (The Pitch Detection Agent):** A chromatic tuner using the YIN pitch detection algorithm. Operates on a 4096-sample circular buffer (~85ms window at 48kHz), providing accurate fundamental frequency detection down to E2 (82.41Hz). Reports detected note name, octave, cent offset, and signal presence via atomic variables for thread-safe GUI display. Updates at ~15Hz to balance responsiveness and CPU usage.
 
 ---
@@ -86,4 +89,4 @@ Because the UI Agent and the DSP Agents operate on entirely different threads (w
 
 ---
 **Maintained by:** [@sudip-mondal-2002](https://github.com/sudip-mondal-2002)
-**Architecture Reference** — 11 DSP effects, 7 system agents
+**Architecture Reference** — 12 DSP effects, 7 system agents

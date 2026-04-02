@@ -54,9 +54,6 @@ private:
     static std::string to_json(const PresetData& preset);
     static bool from_json(const std::string& json, PresetData& preset);
 
-    // Create effect by type name
-    static std::shared_ptr<Effect> create_effect(const std::string& type);
-
     // Escape/unescape strings for JSON
     static std::string escape_json_string(const std::string& s);
     static std::string unescape_json_string(const std::string& s);

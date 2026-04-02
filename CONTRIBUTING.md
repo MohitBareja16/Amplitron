@@ -76,7 +76,7 @@ make amplitron-tests
 ./amplitron-tests
 ```
 
-All tests must pass before submitting a PR.
+All tests must pass before submitting a PR (105+ unit tests + Playwright e2e tests in `tests/web/`).
 
 ## Code Style
 

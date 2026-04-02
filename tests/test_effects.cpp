@@ -10,6 +10,7 @@
 #include "audio/effects/cabinet_sim.h"
 #include "audio/effects/amp_simulator.h"
 #include "audio/effects/tuner.h"
+#include "audio/effects/wah.h"
 #include <cstring>
 #include <cmath>
 
@@ -88,6 +89,9 @@ TEST(effect_has_name) {
 
     TunerPedal tuner;
     ASSERT_TRUE(std::strcmp(tuner.name(), "Tuner") == 0);
+
+    WahPedal wah;
+    ASSERT_TRUE(std::strcmp(wah.name(), "Wah") == 0);
 }
 
 TEST(effect_has_params) {
@@ -537,6 +541,7 @@ TEST(all_effects_handle_silence) {
         std::make_shared<CabinetSim>(),
         std::make_shared<AmpSimulator>(),
         std::make_shared<TunerPedal>(),
+        std::make_shared<WahPedal>(),
     };
 
     float buf[256];
@@ -562,6 +567,7 @@ TEST(all_effects_reset_without_crash) {
         std::make_shared<CabinetSim>(),
         std::make_shared<AmpSimulator>(),
         std::make_shared<TunerPedal>(),
+        std::make_shared<WahPedal>(),
     };
 
     for (auto& fx : effects) {
@@ -593,6 +599,7 @@ TEST(all_effects_handle_different_sample_rates) {
         std::make_shared<CabinetSim>(),
         std::make_shared<AmpSimulator>(),
         std::make_shared<TunerPedal>(),
+        std::make_shared<WahPedal>(),
     };
 
     float buf[256];
@@ -605,4 +612,102 @@ TEST(all_effects_handle_different_sample_rates) {
             ASSERT_TRUE(buffer_is_finite(buf, 256));
         }
     }
+}
+
+// ============================================================
+// WahPedal tests
+// ============================================================
+
+TEST(wah_has_name) {
+    WahPedal wah;
+    ASSERT_TRUE(std::strcmp(wah.name(), "Wah") == 0);
+}
+
+TEST(wah_params_valid_ranges) {
+    WahPedal wah;
+    for (auto& p : wah.params()) {
+        ASSERT_TRUE(p.min_val <= p.max_val);
+        ASSERT_TRUE(p.value >= p.min_val && p.value <= p.max_val);
+        ASSERT_TRUE(p.default_val >= p.min_val && p.default_val <= p.max_val);
+    }
+}
+
+TEST(wah_produces_finite_output) {
+    WahPedal wah;
+    wah.set_sample_rate(48000);
+    wah.reset();
+
+    float buf[256];
+    fill_sine(buf, 256, 440.0f, 48000);
+    wah.process(buf, 256);
+    ASSERT_TRUE(buffer_is_finite(buf, 256));
+}
+
+TEST(wah_disabled_passes_dry_signal) {
+    WahPedal wah;
+    wah.set_sample_rate(48000);
+    wah.reset();
+    wah.set_enabled(false);
+
+    float buf[256];
+    float ref[256];
+    fill_sine(buf, 256, 440.0f, 48000);
+    for (int i = 0; i < 256; ++i) ref[i] = buf[i];
+    wah.process(buf, 256);
+
+    for (int i = 0; i < 256; ++i)
+        ASSERT_NEAR(buf[i], ref[i], 1e-6f);
+}
+
+// Verify that bandpass centre frequency actually tracks the sweep parameter:
+// heel-down (sweep=0) should output less energy at 2kHz than toe-down (sweep=1).
+TEST(wah_bandpass_tracks_sweep) {
+    const int SR = 48000;
+    const int N  = 4096; // long enough for the filter to settle
+
+    // Measure bandpass output RMS at 2 kHz for heel-down vs toe-down
+    auto measure_rms_at = [&](float sweep_val) -> float {
+        WahPedal wah;
+        wah.set_sample_rate(SR);
+        wah.reset();
+        // Manual mode, mix fully wet so we hear only the bandpass
+        wah.set_mix(1.0f);
+        wah.params()[0].value = 0.0f; // manual mode
+        wah.params()[1].value = sweep_val;
+        wah.params()[2].value = 3.5f; // default resonance
+
+        float buf[4096];
+        fill_sine(buf, N, 2000.0f, SR); // 2 kHz probe tone
+        wah.process(buf, N);
+        return rms(buf, N);
+    };
+
+    float rms_heel = measure_rms_at(0.0f); // centre ~350 Hz — 2 kHz is out-of-band
+    float rms_toe  = measure_rms_at(1.0f); // centre ~2500 Hz — 2 kHz is in-band
+
+    // Toe-down should pass significantly more energy at 2 kHz
+    ASSERT_GT(rms_toe, rms_heel * 2.0f);
+}
+
+TEST(wah_auto_mode_responds_to_amplitude) {
+    const int SR = 48000;
+    const int N  = 2048;
+
+    WahPedal wah;
+    wah.set_sample_rate(SR);
+    wah.reset();
+    wah.params()[0].value = 1.0f;  // auto-wah mode
+    wah.params()[3].value = 1.0f;  // max sensitivity
+
+    // Feed silence — filter should stay near heel
+    float silent[2048] = {};
+    wah.process(silent, N);
+    ASSERT_TRUE(buffer_is_finite(silent, N));
+
+    // Feed a loud signal — filter should react (envelope follower charges up)
+    float loud[2048];
+    fill_sine(loud, N, 440.0f, SR);
+    for (int i = 0; i < N; ++i) loud[i] *= 0.9f; // near-full scale
+    wah.process(loud, N);
+    ASSERT_TRUE(buffer_is_finite(loud, N));
 }

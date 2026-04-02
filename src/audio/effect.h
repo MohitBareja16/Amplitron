@@ -31,6 +31,12 @@ public:
     void set_mix(float mix) { mix_ = clamp(mix, 0.0f, 1.0f); }
     float get_mix() const { return mix_; }
 
+    // Protects params() value fields from concurrent UI writes and audio reads.
+    // UI thread: std::lock_guard when writing any EffectParam::value.
+    // Audio thread: std::mutex::try_lock inside process(); fall back to cached
+    // values if the lock is held by the UI.
+    std::mutex params_mutex;
+
 protected:
     int sample_rate_ = DEFAULT_SAMPLE_RATE;
     bool enabled_ = true;

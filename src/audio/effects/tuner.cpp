@@ -1,9 +1,12 @@
 #include "audio/effects/tuner.h"
+#include "audio/effect_factory.h"
 
 #include <cmath>
 #include <cstring>
 
 namespace GuitarAmp {
+
+static EffectRegistrar<TunerPedal> reg("Tuner");
 
 static const char* NOTE_NAMES[] = {
     "C", "C#", "D", "D#", "E", "F",

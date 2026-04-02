@@ -109,7 +109,13 @@ set(APP_SOURCES
     src/audio/effects/cabinet_sim.cpp
     src/audio/effects/amp_simulator.cpp
     src/audio/effects/tuner.cpp
+    src/audio/effects/wah.cpp
     src/gui/gui_manager.cpp
+    src/gui/gui_settings.cpp
+    src/gui/gui_presets.cpp
+    src/gui/gui_recording.cpp
+    src/gui/gui_tuner.cpp
+    src/gui/gui_analyzer.cpp
     src/gui/spectrum_analyzer.cpp
     src/gui/pedal_board.cpp
     src/gui/pedal_widget.cpp
@@ -248,6 +254,7 @@ else() # NOT EMSCRIPTEN
         src/audio/effects/cabinet_sim.cpp
         src/audio/effects/amp_simulator.cpp
         src/audio/effects/tuner.cpp
+        src/audio/effects/wah.cpp
     )
 
     add_executable(amplitron-tests ${TEST_SOURCES} ${CORE_SOURCES})
@@ -283,8 +290,18 @@ else() # NOT EMSCRIPTEN
     )
     add_dependencies(copy_presets guitar-amp)
 
+    # Copy fonts into build directory alongside the executable
+    add_custom_target(copy_fonts ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/assets/fonts"
+            "$<TARGET_FILE_DIR:guitar-amp>/assets/fonts"
+        COMMENT "Copying fonts to build directory"
+    )
+    add_dependencies(copy_fonts guitar-amp)
+
     # Install
     install(TARGETS guitar-amp RUNTIME DESTINATION bin)
     install(DIRECTORY presets DESTINATION bin)
+    install(DIRECTORY assets/fonts DESTINATION bin/assets)
 
 endif() # EMSCRIPTEN

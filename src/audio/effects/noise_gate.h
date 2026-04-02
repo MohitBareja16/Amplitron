@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio/effect.h"
+#include "audio/dsp/envelope_follower.h"
 
 namespace GuitarAmp {
 
@@ -14,11 +15,8 @@ public:
 
 private:
     std::vector<EffectParam> params_;
-    float envelope_ = 0.0f;
+    EnvelopeFollower env_;
     float gain_ = 0.0f;
-    float attack_coeff_ = 0.0f;
-    float release_coeff_ = 0.0f;
-    void update_coefficients();
 };
 
 } // namespace GuitarAmp

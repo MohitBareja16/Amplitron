@@ -1,6 +1,9 @@
 #include "audio/effects/chorus.h"
+#include "audio/effect_factory.h"
 
 namespace GuitarAmp {
+
+static EffectRegistrar<Chorus> reg("Chorus");
 
 Chorus::Chorus() {
     params_ = {

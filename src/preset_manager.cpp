@@ -1,15 +1,5 @@
 #include "preset_manager.h"
-#include "audio/effects/noise_gate.h"
-#include "audio/effects/compressor.h"
-#include "audio/effects/overdrive.h"
-#include "audio/effects/distortion.h"
-#include "audio/effects/equalizer.h"
-#include "audio/effects/chorus.h"
-#include "audio/effects/delay.h"
-#include "audio/effects/reverb.h"
-#include "audio/effects/cabinet_sim.h"
-#include "audio/effects/amp_simulator.h"
-#include "audio/effects/tuner.h"
+#include "audio/effect_factory.h"
 
 #include <iostream>
 #include <ctime>
@@ -65,21 +55,6 @@ std::vector<std::string> PresetManager::list_presets() {
 #endif
 
     return result;
-}
-
-std::shared_ptr<Effect> PresetManager::create_effect(const std::string& type) {
-    if (type == "Noise Gate")  return std::make_shared<NoiseGate>();
-    if (type == "Compressor")  return std::make_shared<Compressor>();
-    if (type == "Overdrive")   return std::make_shared<Overdrive>();
-    if (type == "Distortion")  return std::make_shared<Distortion>();
-    if (type == "Equalizer")   return std::make_shared<Equalizer>();
-    if (type == "Chorus")      return std::make_shared<Chorus>();
-    if (type == "Delay")       return std::make_shared<Delay>();
-    if (type == "Reverb")      return std::make_shared<Reverb>();
-    if (type == "Cabinet")     return std::make_shared<CabinetSim>();
-    if (type == "Amp Sim")     return std::make_shared<AmpSimulator>();
-    if (type == "Tuner")       return std::make_shared<TunerPedal>();
-    return nullptr;
 }
 
 std::string PresetManager::escape_json_string(const std::string& s) {
@@ -357,9 +332,9 @@ bool PresetManager::load_preset(const std::string& filepath,
     engine.set_input_gain(preset.input_gain);
     engine.set_output_gain(preset.output_gain);
 
-    // Recreate effect chain
+    // Recreate effect chain using the factory registry
     for (auto& fd : preset.effects) {
-        auto fx = create_effect(fd.type);
+        auto fx = EffectFactory::instance().create(fd.type);
         if (!fx) {
             std::cerr << "Unknown effect type: " << fd.type << std::endl;
             continue;

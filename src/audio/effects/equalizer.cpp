@@ -1,6 +1,9 @@
 #include "audio/effects/equalizer.h"
+#include "audio/effect_factory.h"
 
 namespace GuitarAmp {
+
+static EffectRegistrar<Equalizer> reg("Equalizer");
 
 Equalizer::Equalizer() {
     params_ = {
@@ -14,7 +17,11 @@ Equalizer::Equalizer() {
 
 void Equalizer::set_sample_rate(int sample_rate) {
     Effect::set_sample_rate(sample_rate);
-    // Force recomputation on next process() call
+    // Snap smoothing states and force recomputation
+    bass_state_     = params_[0].value;
+    mid_state_      = params_[1].value;
+    treble_state_   = params_[2].value;
+    presence_state_ = params_.size() > 3 ? params_[3].value : 0.0f;
     cached_bass_ = -999.0f;
     cached_mid_ = -999.0f;
     cached_treble_ = -999.0f;
@@ -22,67 +29,20 @@ void Equalizer::set_sample_rate(int sample_rate) {
     recompute_coefficients_if_dirty();
 }
 
-void Equalizer::compute_low_shelf(float freq, float gain_db, float q) {
-    float A = std::pow(10.0f, gain_db / 40.0f);
-    float w0 = TWO_PI * freq / sample_rate_;
-    float cos_w0 = std::cos(w0);
-    float sin_w0 = std::sin(w0);
-    float alpha = sin_w0 / (2.0f * q);
-    float sqA = std::sqrt(A);
-
-    float a0 = (A + 1) + (A - 1) * cos_w0 + 2 * sqA * alpha;
-    low_shelf_.b0 = (A * ((A + 1) - (A - 1) * cos_w0 + 2 * sqA * alpha)) / a0;
-    low_shelf_.b1 = (2 * A * ((A - 1) - (A + 1) * cos_w0)) / a0;
-    low_shelf_.b2 = (A * ((A + 1) - (A - 1) * cos_w0 - 2 * sqA * alpha)) / a0;
-    low_shelf_.a1 = (-2 * ((A - 1) + (A + 1) * cos_w0)) / a0;
-    low_shelf_.a2 = ((A + 1) + (A - 1) * cos_w0 - 2 * sqA * alpha) / a0;
-}
-
-void Equalizer::compute_peaking(float freq, float gain_db, float q) {
-    float A = std::pow(10.0f, gain_db / 40.0f);
-    float w0 = TWO_PI * freq / sample_rate_;
-    float cos_w0 = std::cos(w0);
-    float sin_w0 = std::sin(w0);
-    float alpha = sin_w0 / (2.0f * q);
-
-    float a0 = 1 + alpha / A;
-    mid_peak_.b0 = (1 + alpha * A) / a0;
-    mid_peak_.b1 = (-2 * cos_w0) / a0;
-    mid_peak_.b2 = (1 - alpha * A) / a0;
-    mid_peak_.a1 = (-2 * cos_w0) / a0;
-    mid_peak_.a2 = (1 - alpha / A) / a0;
-}
-
-void Equalizer::compute_high_shelf(float freq, float gain_db, float q) {
-    float A = std::pow(10.0f, gain_db / 40.0f);
-    float w0 = TWO_PI * freq / sample_rate_;
-    float cos_w0 = std::cos(w0);
-    float sin_w0 = std::sin(w0);
-    float alpha = sin_w0 / (2.0f * q);
-    float sqA = std::sqrt(A);
-
-    float a0 = (A + 1) - (A - 1) * cos_w0 + 2 * sqA * alpha;
-    high_shelf_.b0 = (A * ((A + 1) + (A - 1) * cos_w0 + 2 * sqA * alpha)) / a0;
-    high_shelf_.b1 = (-2 * A * ((A - 1) + (A + 1) * cos_w0)) / a0;
-    high_shelf_.b2 = (A * ((A + 1) + (A - 1) * cos_w0 - 2 * sqA * alpha)) / a0;
-    high_shelf_.a1 = (2 * ((A - 1) - (A + 1) * cos_w0)) / a0;
-    high_shelf_.a2 = ((A + 1) - (A - 1) * cos_w0 - 2 * sqA * alpha) / a0;
-}
-
 void Equalizer::recompute_coefficients_if_dirty() {
-    float bass = params_[0].value;
-    float mid = params_[1].value;
-    float treble = params_[2].value;
-    float presence = params_.size() > 3 ? params_[3].value : 0.0f;
+    float bass     = bass_state_;
+    float mid      = mid_state_;
+    float treble   = treble_state_;
+    float presence = presence_state_;
 
     if (bass != cached_bass_ || mid != cached_mid_ ||
         treble != cached_treble_ || presence != cached_presence_) {
-        compute_low_shelf(200.0f, bass, 0.7f);
-        compute_peaking(800.0f, mid, 1.0f);
-        compute_high_shelf(3000.0f, treble, 0.7f);
-        cached_bass_ = bass;
-        cached_mid_ = mid;
-        cached_treble_ = treble;
+        low_shelf_.set_low_shelf(200.0f, bass, 0.7f, sample_rate_);
+        mid_peak_.set_peaking(800.0f, mid, 1.0f, sample_rate_);
+        high_shelf_.set_high_shelf(3000.0f, treble + presence, 0.7f, sample_rate_);
+        cached_bass_     = bass;
+        cached_mid_      = mid;
+        cached_treble_   = treble;
         cached_presence_ = presence;
     }
 }
@@ -90,7 +50,13 @@ void Equalizer::recompute_coefficients_if_dirty() {
 void Equalizer::process(float* buffer, int num_samples) {
     if (!enabled_) return;
 
-    // Only recompute biquad coefficients when parameters actually changed
+    // One-pole smoothing: advance states toward raw param targets each block
+    const float alpha = 1.0f - std::exp(-1.0f / (sample_rate_ * 0.010f)); // 10 ms
+    bass_state_     += alpha * (params_[0].value - bass_state_);
+    mid_state_      += alpha * (params_[1].value - mid_state_);
+    treble_state_   += alpha * (params_[2].value - treble_state_);
+    presence_state_ += alpha * ((params_.size() > 3 ? params_[3].value : 0.0f) - presence_state_);
+
     recompute_coefficients_if_dirty();
 
     for (int i = 0; i < num_samples; ++i) {

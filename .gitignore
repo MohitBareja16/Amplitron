@@ -29,6 +29,7 @@ desktop.ini
 
 # Dependencies (fetched by setup script)
 external/
+node_modules/
 
 
 # Compiled

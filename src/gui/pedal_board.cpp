@@ -13,6 +13,7 @@
 #include "audio/effects/reverb.h"
 #include "audio/effects/cabinet_sim.h"
 #include "audio/effects/amp_simulator.h"
+#include "audio/effects/wah.h"
 #include <cstring>
 #include <cstdio>
 #include <set>
@@ -30,52 +31,43 @@ PedalBoard::PedalBoard(AudioEngine& engine, CommandHistory& history)
 /** @brief Default destructor. */
 PedalBoard::~PedalBoard() = default;
 
-/** @brief Update which pedals are visible based on current state. */
-void PedalBoard::update_visible_pedals() {
+/** @brief Recreate PedalWidget list to match the engine's current effect chain.
+ *  Visibility is preserved by effect pointer identity so that a footswitch-off pedal
+ *  stays on the board.  Brand-new effects (unrecognised pointers, e.g. after a preset
+ *  load or an add) are shown only if they are currently enabled or are the Amp Sim. */
+void PedalBoard::rebuild_widgets() {
+    // Snapshot which effect pointers are currently on the board before clearing.
+    std::set<Effect*> prev_visible;
+    for (int idx : visible_indices_) {
+        if (idx >= 0 && idx < static_cast<int>(widgets_.size())) {
+            prev_visible.insert(widgets_[idx]->get_effect().get());
+        }
+    }
+
+    widgets_.clear();
     visible_indices_.clear();
     auto& effects = engine_.effects();
-    
-    // Always show EQ and Reverb if they exist
-    for (int i = 0; i < static_cast<int>(effects.size()); ++i) {
-        const char* name = effects[i]->name();
-        if (std::strcmp(name, "Equalizer") == 0 || std::strcmp(name, "Reverb") == 0) {
-            visible_indices_.insert(i);
-        }
-    }
-    
-    // Add any other pedals that were explicitly added (not just enabled)
-    // We'll track this in rebuild_widgets() when new effects are added
-}
 
-/** @brief Recreate PedalWidget list to match the engine's current effect chain. */
-void PedalBoard::rebuild_widgets() {
-    // Remember which effects were visible before rebuild
-    std::set<Effect*> visible_ptrs;
-    for (int idx : visible_indices_) {
-        if (idx < static_cast<int>(widgets_.size())) {
-            visible_ptrs.insert(widgets_[idx]->get_effect().get());
-        }
-    }
-    
-    widgets_.clear();
-    auto& effects = engine_.effects();
+    // Determine amp position so post-amp effects are never shown on the board.
+    int amp_idx = find_amp_index();
+
     for (int i = 0; i < static_cast<int>(effects.size()); ++i) {
         auto w = std::make_unique<PedalWidget>(engine_, effects[i], i);
         w->set_history(&history_);
         widgets_.push_back(std::move(w));
-    }
-    
-    // Restore visibility and add any new effects
-    update_visible_pedals();
-    for (int i = 0; i < static_cast<int>(effects.size()); ++i) {
-        const char* name = effects[i]->name();
-        bool is_amp = (std::strcmp(name, "Amp Sim") == 0);
-        bool is_special = (std::strcmp(name, "Equalizer") == 0 || std::strcmp(name, "Reverb") == 0);
-        bool was_visible = visible_ptrs.count(effects[i].get()) > 0;
-        
-        // Always show amps, EQ, and Reverb
-        // Show other effects if they were visible before
-        if (is_amp || is_special || was_visible) {
+
+        Effect* ptr = effects[i].get();
+        bool is_amp = (amp_idx >= 0 && i == amp_idx);
+        bool is_post_amp = (amp_idx >= 0 && i > amp_idx);
+
+        // Post-amp effects are never shown on the pedalboard.
+        if (is_post_amp) continue;
+
+        if (prev_visible.count(ptr)) {
+            // Effect was already on the board — keep it visible regardless of enabled state.
+            visible_indices_.insert(i);
+        } else if (effects[i]->is_enabled() || is_amp) {
+            // New effect (add pedal, preset load, initial build) — show only if enabled.
             visible_indices_.insert(i);
         }
     }
@@ -92,7 +84,14 @@ int PedalBoard::find_amp_index() const {
 
 /** @brief Render the toolbar (add/reset) and the scrollable signal chain area. */
 void PedalBoard::render() {
-    ImGui::BeginChild("PedalToolbar", ImVec2(0, 35), true);
+    ImGui::BeginChild("PedalToolbar", ImVec2(0, 40), true);
+    // Vertically center the single button row so top and bottom padding are equal
+    {
+        float avail = ImGui::GetContentRegionAvail().y;
+        float row_h = ImGui::GetFrameHeight();
+        float offset = std::max(0.0f, (avail - row_h) * 0.5f);
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + offset);
+    }
     render_add_pedal_menu();
     ImGui::SameLine();
 
@@ -138,18 +137,8 @@ void PedalBoard::render() {
 
 /** @brief Add an effect to the chain via undo system, rebuild widgets, and make it visible. */
 void PedalBoard::add_effect_and_show(std::shared_ptr<Effect> effect) {
-    auto effect_ptr = effect.get();
     history_.execute(std::make_unique<AddEffectCommand>(engine_, std::move(effect)));
     rebuild_widgets();
-    
-    // Find the newly added effect and make it visible
-    auto& effects = engine_.effects();
-    for (int i = 0; i < static_cast<int>(effects.size()); ++i) {
-        if (effects[i].get() == effect_ptr) {
-            visible_indices_.insert(i);
-            break;
-        }
-    }
 }
 
 /** @brief Render the "+ Add Pedal" button and category popup with effect menu items.
@@ -190,6 +179,12 @@ void PedalBoard::render_add_pedal_menu() {
         }
         if (ImGui::MenuItem("Reverb")) {
             add_effect_and_show(std::make_shared<Reverb>());
+        }
+
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.30f, 0.75f, 0.60f, 1.0f), "FILTER");
+        if (ImGui::MenuItem("Wah")) {
+            add_effect_and_show(std::make_shared<WahPedal>());
         }
 
         ImGui::Separator();
@@ -296,17 +291,14 @@ void PedalBoard::render_signal_chain() {
 
     for (int vi = 0; vi < static_cast<int>(visible.size()); ++vi) {
         int i = visible[vi];
-        ImGui::SetCursorScreenPos(ImVec2(pedal_x, origin.y + 5));
-
-        if (widgets_[i]->render()) {
-            remove_idx = i;
-        }
-
-        // Drag-and-drop reordering
         ImVec2 pedal_min = ImVec2(pedal_x, origin.y + 5);
+
+        // Drag-and-drop reordering — render the full-pedal hit area FIRST as a
+        // background layer, then allow the widget's knobs/switches to overlap it.
         ImGui::SetCursorScreenPos(pedal_min);
         char dnd_id[32];
         snprintf(dnd_id, sizeof(dnd_id), "##dnd_%d", i);
+        ImGui::SetNextItemAllowOverlap();
         ImGui::InvisibleButton(dnd_id, ImVec2(Theme::PEDAL_WIDTH, Theme::PEDAL_HEIGHT));
 
         bool is_amp = std::strcmp(widgets_[i]->get_effect()->name(), "Amp Sim") == 0;
@@ -326,6 +318,13 @@ void PedalBoard::render_signal_chain() {
                 }
                 ImGui::EndDragDropTarget();
             }
+        }
+
+        // Render the pedal widget on top — its interactive elements take priority
+        // over the DND background button thanks to SetNextItemAllowOverlap above.
+        ImGui::SetCursorScreenPos(pedal_min);
+        if (widgets_[i]->render()) {
+            remove_idx = i;
         }
 
         // Connection dot between pedals

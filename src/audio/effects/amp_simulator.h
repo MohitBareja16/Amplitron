@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio/effect.h"
+#include "audio/dsp/biquad.h"
 
 namespace GuitarAmp {
 
@@ -34,8 +35,8 @@ struct AmpModel {
     float output_level;        ///< Post-saturation output scaling
 
     // --- Dynamic response ---
-    float attack_coeff;        ///< Envelope follower attack speed (0–1, higher = faster)
-    float release_coeff;       ///< Envelope follower release speed (0–1, higher = faster)
+    float attack_coeff;        ///< Envelope follower attack speed (0-1, higher = faster)
+    float release_coeff;       ///< Envelope follower release speed (0-1, higher = faster)
     float sag_amount;          ///< Power-sag simulation depth (0 = none)
 };
 
@@ -48,12 +49,9 @@ const std::vector<AmpModel>& get_amp_models();
 /**
  * @brief Preamp simulator effect with selectable amp models.
  *
- * Implements a complete preamp stage: input gain → envelope follower →
- * tone-stack EQ (3 biquad filters) → waveshaping saturation → output level.
+ * Implements a complete preamp stage: input gain -> envelope follower ->
+ * tone-stack EQ (3 biquad filters) -> waveshaping saturation -> output level.
  * The tonal character is defined by the selected AmpModel.
- *
- * Exposed as a standard Effect pedal so it integrates with the signal chain,
- * preset system, and undo/redo infrastructure.
  */
 class AmpSimulator : public Effect {
 public:
@@ -68,29 +66,22 @@ private:
     std::vector<EffectParam> params_;
 
     // 3-band tone-stack biquad filters
-    struct BiquadState {
-        float x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-        float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
-
-        float process(float x) {
-            float y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-            x2 = x1; x1 = x;
-            y2 = y1; y1 = y;
-            return y;
-        }
-
-        void reset() { x1 = x2 = y1 = y2 = 0; }
-    };
-
-    BiquadState low_shelf_;
-    BiquadState mid_peak_;
-    BiquadState high_shelf_;
+    Biquad low_shelf_;
+    Biquad mid_peak_;
+    Biquad high_shelf_;
 
     // Envelope follower for dynamic response
     float envelope_ = 0.0f;
 
     // DC blocking high-pass state
-    float hp_state_ = 0.0f;
+    OnePole dc_block_;
+
+    // One-pole smoothing states for trim parameters (avoids coefficient click on UI change)
+    float bass_trim_state_ = 0.0f;
+    float mid_trim_state_ = 0.0f;
+    float treble_trim_state_ = 0.0f;
+    float gain_smoothed_ = 0.5f;
+    float level_smoothed_ = 0.7f;
 
     // Cached model index for dirty-check coefficient recomputation
     int cached_model_index_ = -1;
@@ -100,9 +91,6 @@ private:
     float cached_gain_ = -999.0f;
 
     void recompute_coefficients_if_dirty();
-    void compute_low_shelf(float freq, float gain_db, float q);
-    void compute_peaking(float freq, float gain_db, float q);
-    void compute_high_shelf(float freq, float gain_db, float q);
 };
 
 } // namespace GuitarAmp

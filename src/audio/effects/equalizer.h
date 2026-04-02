@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio/effect.h"
+#include "audio/dsp/biquad.h"
 
 namespace GuitarAmp {
 
@@ -16,24 +17,15 @@ public:
 private:
     std::vector<EffectParam> params_;
 
-    // 3-band EQ using biquad filters
-    struct BiquadState {
-        float x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-        float b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
+    Biquad low_shelf_;
+    Biquad mid_peak_;
+    Biquad high_shelf_;
 
-        float process(float x) {
-            float y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-            x2 = x1; x1 = x;
-            y2 = y1; y1 = y;
-            return y;
-        }
-
-        void reset() { x1 = x2 = y1 = y2 = 0; }
-    };
-
-    BiquadState low_shelf_;
-    BiquadState mid_peak_;
-    BiquadState high_shelf_;
+    // One-pole smoothing states (avoids zipper noise on UI parameter jumps)
+    float bass_state_ = 0.0f;
+    float mid_state_ = 0.0f;
+    float treble_state_ = 0.0f;
+    float presence_state_ = 0.0f;
 
     // Cached parameter values for dirty-check
     float cached_bass_ = -999.0f;
@@ -42,9 +34,6 @@ private:
     float cached_presence_ = -999.0f;
 
     void recompute_coefficients_if_dirty();
-    void compute_low_shelf(float freq, float gain_db, float q);
-    void compute_peaking(float freq, float gain_db, float q);
-    void compute_high_shelf(float freq, float gain_db, float q);
 };
 
 } // namespace GuitarAmp

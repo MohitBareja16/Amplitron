@@ -1,6 +1,9 @@
 #include "audio/effects/delay.h"
+#include "audio/effect_factory.h"
 
 namespace GuitarAmp {
+
+static EffectRegistrar<Delay> reg("Delay");
 
 Delay::Delay() {
     params_ = {
@@ -22,10 +25,16 @@ void Delay::set_sample_rate(int sample_rate) {
 void Delay::process(float* buffer, int num_samples) {
     if (!enabled_) return;
 
-    float time_ms = params_[0].value;
-    float feedback = params_[1].value;
-    float tone = params_[2].value;
-    float level = params_[3].value;
+    const float alpha = 1.0f - std::exp(-1.0f / (sample_rate_ * 0.020f)); // 20 ms
+    smoothed_time_ms_ += alpha * (params_[0].value - smoothed_time_ms_);
+    smoothed_feedback_ += alpha * (params_[1].value - smoothed_feedback_);
+    smoothed_tone_     += alpha * (params_[2].value - smoothed_tone_);
+    smoothed_level_    += alpha * (params_[3].value - smoothed_level_);
+
+    float time_ms = smoothed_time_ms_;
+    float feedback = smoothed_feedback_;
+    float tone = smoothed_tone_;
+    float level = smoothed_level_;
 
     int delay_samples = static_cast<int>(time_ms * 0.001f * sample_rate_);
     delay_samples = std::min(delay_samples, max_delay_samples_ - 1);
@@ -40,8 +49,7 @@ void Delay::process(float* buffer, int num_samples) {
         float delayed = delay_buffer_[read_pos];
 
         // Tone filter on feedback path
-        lp_state_ += lp_coeff * (delayed - lp_state_);
-        float filtered = lp_state_;
+        float filtered = tone_lp_.lp(delayed, lp_coeff);
 
         // Write to delay buffer: input + filtered feedback
         delay_buffer_[write_pos_] = buffer[i] + filtered * feedback;
@@ -56,7 +64,7 @@ void Delay::process(float* buffer, int num_samples) {
 void Delay::reset() {
     std::fill(delay_buffer_.begin(), delay_buffer_.end(), 0.0f);
     write_pos_ = 0;
-    lp_state_ = 0.0f;
+    tone_lp_.reset();
 }
 
 } // namespace GuitarAmp
