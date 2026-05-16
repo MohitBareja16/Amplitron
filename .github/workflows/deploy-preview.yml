@@ -35,27 +35,32 @@ jobs:
           path: web-build
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Resolve PR number from head SHA
+      
+      - name: Resolve PR number from head branch
         id: resolve-pr
         uses: actions/github-script@v8
         with:
           script: |
-            const headSha = '${{ github.event.workflow_run.head_sha }}';
+            const headSha    = '${{ github.event.workflow_run.head_sha }}';
+            const headBranch = '${{ github.event.workflow_run.head_branch }}';
+            const headOwner  = '${{ github.event.workflow_run.head_repository.owner.login }}';
 
-            const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+            // Works for same-repo and fork PRs
+            const { data: prs } = await github.rest.pulls.list({
               owner: context.repo.owner,
-              repo: context.repo.repo,
-              commit_sha: headSha,
+              repo:  context.repo.repo,
+              state: 'open',
+              head:  `${headOwner}:${headBranch}`,
             });
 
-            const open = prs.find(pr => pr.state === 'open');
-            if (!open) {
-              core.setFailed(`No open PR found for commit ${headSha}`);
+            if (!prs.length) {
+              core.setFailed(`No open PR found for branch ${headOwner}:${headBranch}`);
               return;
             }
 
-            core.setOutput('pr_number', open.number);
-            core.setOutput('head_sha', headSha);
+            const pr = prs[0];
+            core.setOutput('pr_number', pr.number);
+            core.setOutput('head_sha',  headSha);
             core.setOutput('short_sha', headSha.slice(0, 7));
             
       - name: Stage preview artifact
