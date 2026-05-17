@@ -20,6 +20,9 @@
 #if defined(EMSCRIPTEN) || (defined(__APPLE__) && TARGET_OS_IOS)
 #  define AMPLITRON_NO_DESKTOP_SHELL 1
 #endif
+#ifdef __EMSCRIPTEN__
+#  include <emscripten.h>
+#endif
 
 #pragma GCC diagnostic push
 #if defined(__GNUC__) && !defined(__clang__)
