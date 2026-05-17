@@ -97,24 +97,22 @@ bool GuiManager::initialize(int width, int height) {
     ImGui::StyleColorsDark();
     Theme::ApplyStyle();
 
-// --- DPI scaling and font loading ---
+    // --- DPI scaling and font loading ---
     float dpi_scale = 1.0f;
-    #ifdef __EMSCRIPTEN__
-    // Query the browser's high-DPI resolution rendering multiplier directly
-    dpi_scale = emscripten_get_device_pixel_ratio();
-    
-    // Explicitly tell the canvas element to scale its dimensions to match the DPI scale
-    emscripten_set_canvas_element_size("#canvas", 
-        static_cast<int>(window_width_ * dpi_scale), 
-        static_cast<int>(window_height_ * dpi_scale));
-    #else
     {
         int draw_w = window_width_, draw_h = window_height_;
         SDL_GL_GetDrawableSize(window_, &draw_w, &draw_h);
         if (window_width_ > 0)
             dpi_scale = static_cast<float>(draw_w) / static_cast<float>(window_width_);
     }
-    #endif
+
+#ifdef __EMSCRIPTEN__
+    // If SDL didn't pick up a high DPI scaling factor inside the browser, fallback safely
+    if (dpi_scale <= 1.0f) {
+        dpi_scale = emscripten_get_device_pixel_ratio();
+        if (dpi_scale <= 0.0f) dpi_scale = 1.0f;
+    }
+#endif
 
     {
         const float base_font_size = 14.0f;
@@ -128,8 +126,6 @@ bool GuiManager::initialize(int width, int height) {
 
         char* base_path = SDL_GetBasePath();
         if (base_path) {
-            // On a macOS app bundle, SDL_GetBasePath() returns Contents/Resources/ (not MacOS/).
-            // Assets are copied there by the CI workflow, so this resolves correctly.
             try_font(std::string(base_path) + "assets/fonts/Roboto-Medium.ttf");
             SDL_free(base_path);
         }
@@ -141,7 +137,17 @@ bool GuiManager::initialize(int width, int height) {
         if (!loaded_font)
             io.Fonts->AddFontDefault();
 
+        // Scale ImGui's internal UI element sizes and padding to match the loaded font resolution
+        ImGuiStyle& style = ImGui::GetStyle();
+        style.ScaleAllSizes(dpi_scale);
+
+#ifdef __EMSCRIPTEN__
+        // On web viewports, setting FontGlobalScale smaller shrinks text rendering. 
+        // We set it to 1.0f here so that font rendering uses the high-res texture space fully.
+        io.FontGlobalScale = 1.0f;
+#else
         io.FontGlobalScale = 1.0f / dpi_scale;
+#endif
     }
 
     // Load window icon from assets/icon.svg
@@ -238,6 +244,5 @@ void GuiManager::shutdown() {
     }
     SDL_Quit();
 }
-
 
 } // namespace Amplitron
