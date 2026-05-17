@@ -77,9 +77,8 @@ int PedalBoard::find_amp_index() const {
 void PedalBoard::render() {
     // Calculate uniform dynamic height matching snapshot bar.
     // GetFontSize() returns raw pixel size; multiply by FontGlobalScale to get visual size.
-    float visual_font_size = ImGui::GetFontSize() * ImGui::GetIO().FontGlobalScale;
-    float font_scale = visual_font_size / 14.0f;
-    float bar_height = 40.0f * font_scale;
+    float font_scale = ImGui::GetFontSize() / 14.0f;
+    float bar_height = 42.0f * font_scale;
 
     ImGui::BeginChild("PedalToolbar", ImVec2(0, bar_height), true,
                        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
