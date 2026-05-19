@@ -7,16 +7,6 @@
 #include <imgui_impl_sdl2.h>
 #include <SDL2/SDL.h>
 #include <SDL.h>
-#if defined(IMGUI_IMPL_OPENGL_ES3) || defined(__ANDROID__) || defined(__EMSCRIPTEN__)
-    #include <GLES3/gl3.h>
-#elif defined(IMGUI_IMPL_OPENGL_ES2)
-    #include <GLES2/gl2.h>
-#elif defined(__APPLE__)
-    #include <OpenGL/gl.h>
-#else
-    #include <GL/gl.h>
-#endif
-#include <SDL_opengl.h>
 #include "gui/gui_snapshots.h"
 
 namespace Amplitron {

@@ -16,7 +16,6 @@
 #include <cstdio>
 #include <SDL2/SDL.h>
 #include <SDL.h>
-#include <SDL_opengl.h>
 #if defined(__APPLE__)
 #  include <TargetConditionals.h>
 #endif
