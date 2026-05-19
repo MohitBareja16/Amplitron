@@ -162,7 +162,6 @@ bool GuiManager::run_frame() {
 
     return true;
 }
-}
 
 void GuiManager::render_master_controls() {
     // Smooth metering
@@ -231,5 +230,4 @@ void GuiManager::render_master_controls() {
     ImGui::Columns(1);
     ImGui::EndChild();
 }
-
 } // namespace Amplitron
