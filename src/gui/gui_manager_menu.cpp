@@ -7,6 +7,9 @@
 #include <SDL2/SDL.h>
 #include <cstdio>
 #include <string>
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
 #if defined(_WIN32)
 #include <windows.h>
 #include <shellapi.h>
