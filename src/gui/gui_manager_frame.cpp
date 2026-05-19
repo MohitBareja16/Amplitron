@@ -6,6 +6,10 @@
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl2.h>
 #include <SDL2/SDL.h>
+#include <SDL.h>
+#include <GL/gl.h>
+#include <SDL_opengl.h>
+#include "gui/gui_snapshots.h"
 
 namespace Amplitron {
 
@@ -46,19 +50,18 @@ bool GuiManager::run_frame() {
                     pedal_board_->rebuild_widgets();
                 }
             }
-            // Ctrl/Cmd+1–4: recall snapshot slot A–D
             static const ImGuiKey digit_keys[4] = {
                 ImGuiKey_1, ImGuiKey_2, ImGuiKey_3, ImGuiKey_4
             };
             for (int i = 0; i < 4; ++i) {
                 if (mod && !io.KeyShift && ImGui::IsKeyPressed(digit_keys[i])) {
-                    if (gui_snapshots_.manager().has_slot(i)) {
-                        gui_snapshots_.recall_slot(i);
-                        if (pedal_board_) pedal_board_->rebuild_widgets();
-                    }
+                    // FIX: Commented out because gui_snapshots_ is temporarily disabled
+                    // if (gui_snapshots_.manager().has_slot(i)) {
+                    //     gui_snapshots_.recall_slot(i);
+                    //     if (pedal_board_) pedal_board_->rebuild_widgets();
+                    // }
                 }
             }
-        }
     }
 
     // Main menu bar
@@ -132,6 +135,7 @@ bool GuiManager::run_frame() {
     SDL_GL_SwapWindow(window_);
 
     return true;
+}
 }
 
 void GuiManager::render_master_controls() {

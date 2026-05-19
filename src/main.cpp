@@ -76,44 +76,48 @@ int main(int argc, char* argv[]) {
     // Only EQ and light reverb are enabled by default — clean acoustic tone.
     // All other effects start bypassed; click the footswitch to enable them.
 
-    auto noise_gate = std::make_shared<Amplitron::NoiseGate>();
-    noise_gate->set_enabled(false);
-    engine.add_effect(noise_gate);
+    engine.add_effect(std::make_shared<Amplitron::Equalizer>());
+    engine.add_effect(std::make_shared<Amplitron::Reverb>());
+    engine.add_effect(std::make_shared<Amplitron::CabinetSim>());
 
-    auto compressor = std::make_shared<Amplitron::Compressor>();
-    compressor->set_enabled(false);
-    engine.add_effect(compressor);
+    // auto noise_gate = std::make_shared<Amplitron::NoiseGate>();
+    // noise_gate->set_enabled(false);
+    // engine.add_effect(noise_gate);
 
-    auto overdrive = std::make_shared<Amplitron::Overdrive>();
-    overdrive->set_enabled(false);
-    engine.add_effect(overdrive);
+    // auto compressor = std::make_shared<Amplitron::Compressor>();
+    // compressor->set_enabled(false);
+    // engine.add_effect(compressor);
 
-    auto distortion = std::make_shared<Amplitron::Distortion>();
-    distortion->set_enabled(false);
-    engine.add_effect(distortion);
+    // auto overdrive = std::make_shared<Amplitron::Overdrive>();
+    // overdrive->set_enabled(false);
+    // engine.add_effect(overdrive);
 
-    auto eq = std::make_shared<Amplitron::Equalizer>();
-    eq->set_enabled(true);  // ON: gentle EQ for tone shaping
-    engine.add_effect(eq);
+    // auto distortion = std::make_shared<Amplitron::Distortion>();
+    // distortion->set_enabled(false);
+    // engine.add_effect(distortion);
 
-    auto chorus = std::make_shared<Amplitron::Chorus>();
-    chorus->set_enabled(false);
-    engine.add_effect(chorus);
+    // auto eq = std::make_shared<Amplitron::Equalizer>();
+    // eq->set_enabled(true);  // ON: gentle EQ for tone shaping
+    // engine.add_effect(eq);
 
-    auto delay = std::make_shared<Amplitron::Delay>();
-    delay->set_enabled(false);
-    engine.add_effect(delay);
+    // auto chorus = std::make_shared<Amplitron::Chorus>();
+    // chorus->set_enabled(false);
+    // engine.add_effect(chorus);
 
-    auto reverb = std::make_shared<Amplitron::Reverb>();
-    reverb->set_enabled(true);  // ON: light room reverb
-    reverb->params()[0].value = 0.3f;  // Decay: 30% (short, natural room)
-    reverb->params()[1].value = 0.4f;  // Damping: mellow
-    reverb->set_mix(0.25f);  // 25% wet — subtle, doesn't wash out the signal
-    engine.add_effect(reverb);
+    // auto delay = std::make_shared<Amplitron::Delay>();
+    // delay->set_enabled(false);
+    // engine.add_effect(delay);
 
-    auto cabinet = std::make_shared<Amplitron::CabinetSim>();
-    cabinet->set_enabled(false);  // OFF: not needed for acoustic guitar
-    engine.add_effect(cabinet);
+    // auto reverb = std::make_shared<Amplitron::Reverb>();
+    // reverb->set_enabled(true);  // ON: light room reverb
+    // reverb->params()[0].value = 0.3f;  // Decay: 30% (short, natural room)
+    // reverb->params()[1].value = 0.4f;  // Damping: mellow
+    // reverb->set_mix(0.25f);  // 25% wet — subtle, doesn't wash out the signal
+    // engine.add_effect(reverb);
+
+    // auto cabinet = std::make_shared<Amplitron::CabinetSim>();
+    // cabinet->set_enabled(false);  // OFF: not needed for acoustic guitar
+    // engine.add_effect(cabinet);
 
     // Lower input gain for piezo/USB guitar cable (they tend to run hot)
     engine.set_input_gain(0.7f);

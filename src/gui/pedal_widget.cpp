@@ -174,20 +174,20 @@ void PedalWidget::render_footswitch_and_extras(ImDrawList* dl, ImVec2 p0, ImVec2
     }
 
     // Remove button (small X at top-right) — not shown for amp
-    if (!is_amp) {
-        ImGui::SetCursorScreenPos(ImVec2(p1.x - 22, p0.y + 2));
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.6f, 0.1f, 0.1f, 0.8f));
-        char remove_label[32];
-        snprintf(remove_label, sizeof(remove_label), "X##rm%d", index_);
-        if (ImGui::SmallButton(remove_label)) {
-            should_remove = true;
-        }
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Remove %s from chain", effect_->name());
-        }
-        ImGui::PopStyleColor(2);
-    }
+    // if (!is_amp) {
+    //     ImGui::SetCursorScreenPos(ImVec2(p1.x - 22, p0.y + 2));
+    //     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+    //     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.6f, 0.1f, 0.1f, 0.8f));
+    //     char remove_label[32];
+    //     snprintf(remove_label, sizeof(remove_label), "X##rm%d", index_);
+    //     if (ImGui::SmallButton(remove_label)) {
+    //         should_remove = true;
+    //     }
+    //     if (ImGui::IsItemHovered()) {
+    //         ImGui::SetTooltip("Remove %s from chain", effect_->name());
+    //     }
+    //     ImGui::PopStyleColor(2);
+    // }
 }
 
 void PedalWidget::commit_param_change(int param_index, float old_val, float new_val) {
