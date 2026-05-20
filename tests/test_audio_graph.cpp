@@ -83,7 +83,7 @@ TEST(audio_graph_dsp_processing) {
 
     // We will use 3 empty "bypass" standard nodes and 1 merge node. 
     // Since pedal pointers are nullptr, they act as pure passthroughs!
-    int p1 = graph.add_node("Splitter", NodeRoutingType::StandardEffect);
+    int p1 = graph.add_node("Splitter", NodeRoutingType::Splitter);
     int p2 = graph.add_node("Path A", NodeRoutingType::StandardEffect);
     int p3 = graph.add_node("Path B", NodeRoutingType::StandardEffect);
     int m4 = graph.add_node("Merge", NodeRoutingType::MergeSum);
@@ -94,7 +94,7 @@ TEST(audio_graph_dsp_processing) {
     auto nodes = graph.get_nodes();
     // P1 -> P2 & P3 (Split)
     graph.add_link(nodes[0].output_pin_ids[0], nodes[1].input_pin_ids[0]);
-    graph.add_link(nodes[0].output_pin_ids[0], nodes[2].input_pin_ids[0]);
+    graph.add_link(nodes[0].output_pin_ids[1], nodes[2].input_pin_ids[0]);
     
     // P2 & P3 -> M4 (Merge)
     nodes = graph.get_nodes();
@@ -126,11 +126,11 @@ TEST(audio_graph_explicit_inputs_sinks) {
     AudioGraphExecutor executor;
     executor.prepare(48000, 128);
 
-    // Create 4 standard nodes:
-    // Node A (designated input)
+    // Create 4 nodes:
+    // Node A (designated input - Splitter)
     // Node B (unwired, should be silent)
     // Node C & Node D (both sinks, should mix their outputs)
-    int nA = graph.add_node("Input Node", NodeRoutingType::StandardEffect);
+    int nA = graph.add_node("Input Node", NodeRoutingType::Splitter);
     graph.add_node("Unwired Node", NodeRoutingType::StandardEffect);
     int nC = graph.add_node("Sink C", NodeRoutingType::StandardEffect);
     int nD = graph.add_node("Sink D", NodeRoutingType::StandardEffect);
@@ -142,7 +142,7 @@ TEST(audio_graph_explicit_inputs_sinks) {
     // Wire: A -> C and A -> D
     auto nodes = graph.get_nodes();
     graph.add_link(nodes[0].output_pin_ids[0], nodes[2].input_pin_ids[0]);
-    graph.add_link(nodes[0].output_pin_ids[0], nodes[3].input_pin_ids[0]);
+    graph.add_link(nodes[0].output_pin_ids[1], nodes[3].input_pin_ids[0]);
 
     ASSERT_TRUE(graph.rebuild_topology());
     executor.compile(graph);

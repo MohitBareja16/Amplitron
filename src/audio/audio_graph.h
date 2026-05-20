@@ -12,6 +12,7 @@ class Effect;
 
 enum class NodeRoutingType {
     StandardEffect,
+    Splitter,
     Mixer,
     MergeSum = Mixer
 };
@@ -59,6 +60,7 @@ public:
     const std::vector<GraphLink>& get_links() const { return links_; }
     
     int get_node_from_pin(int pin_id) const;
+    const DSPNode* find_node(int node_id) const;
 
 private:
     size_t get_node_index(int node_id) const;

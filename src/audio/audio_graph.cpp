@@ -17,10 +17,13 @@ int AudioGraph::add_node(const std::string& name, NodeRoutingType type, std::sha
         node.input_pin_ids.push_back(next_id_++);  // Input Pin Branch A
         node.input_pin_ids.push_back(next_id_++);  // Input Pin Branch B
         node.output_pin_ids.push_back(next_id_++); // 1 Output Pin
+    } else if (type == NodeRoutingType::Splitter) {
+        node.input_pin_ids.push_back(next_id_++);  // 1 Input Pin
+        node.output_pin_ids.push_back(next_id_++); // Output Pin Branch A
+        node.output_pin_ids.push_back(next_id_++); // Output Pin Branch B
     } else {
         node.input_pin_ids.push_back(next_id_++);  
         node.output_pin_ids.push_back(next_id_++); 
-        node.output_pin_ids.push_back(next_id_++); // Multi-output support (2 pins by default)
     }
 
     nodes_.push_back(node);
@@ -43,6 +46,24 @@ int AudioGraph::add_link(int source_pin_id, int dest_pin_id) {
     for (const auto& existing_link : links_) {
         if (existing_link.dest_pin_id == dest_pin_id) {
             return -1; // Pin already in use!
+        }
+    }
+
+    // Enforce that ALL pins can only have ONE outgoing link
+    int source_node_id = get_node_from_pin(source_pin_id);
+    if (source_node_id != -1) {
+        const DSPNode* src_node = find_node(source_node_id);
+        if (src_node) {
+            // Count existing outgoing links from this specific pin
+            int out_count = 0;
+            for (const auto& existing_link : links_) {
+                if (existing_link.source_pin_id == source_pin_id) {
+                    out_count++;
+                }
+            }
+            if (out_count >= 1) {
+                return -1; // Each output pin can only have 1 outgoing connection!
+            }
         }
     }
 
@@ -252,6 +273,13 @@ bool AudioGraph::remove_link(int link_id) {
         return true;
     }
     return false;
+}
+
+const DSPNode* AudioGraph::find_node(int node_id) const {
+    for (const auto& node : nodes_) {
+        if (node.id == node_id) return &node;
+    }
+    return nullptr;
 }
 
 } // namespace Amplitron

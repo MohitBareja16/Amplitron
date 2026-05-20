@@ -95,7 +95,7 @@ void PedalBoard::render_signal_chain() {
             ImGui::SetCursorScreenPos(node_screen_pos);
             ImGui::BeginGroup();
             ImGui::SetWindowFontScale(ui_state.zoom);
-            target_widget->render(); 
+            target_widget->render(ui_state.zoom); 
             ImGui::SetWindowFontScale(1.0f);
             ImGui::EndGroup();
 
