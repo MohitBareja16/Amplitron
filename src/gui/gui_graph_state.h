@@ -21,6 +21,8 @@ public:
     // Canvas panning and zoom/grid configurations
     ImVec2 scrolling = ImVec2(0.0f, 0.0f);
     bool show_grid = true;
+    bool is_fullscreen = false;
+    float zoom = 1.0f;
 
     // Node positioning registry mapped by Node ID
     std::unordered_map<int, NodeLayoutState> node_positions;

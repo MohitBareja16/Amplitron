@@ -26,8 +26,34 @@ void PedalBoard::render_signal_chain() {
         ui_state.scrolling.y += ImGui::GetIO().MouseDelta.y;
     }
 
+    if (ui_state.is_fullscreen) {
+        if (ImGui::IsItemHovered()) {
+            float scroll_y = ImGui::GetIO().MouseWheel;
+            if (scroll_y != 0.0f) {
+                float zoom_factor = (scroll_y > 0) ? 1.1f : (1.0f / 1.1f);
+                ImVec2 mouse_pos = ImGui::GetMousePos();
+                ImVec2 mouse_in_canvas = ImVec2(mouse_pos.x - canvas_pos.x, mouse_pos.y - canvas_pos.y);
+                ui_state.scrolling.x = mouse_in_canvas.x - (mouse_in_canvas.x - ui_state.scrolling.x) * zoom_factor;
+                ui_state.scrolling.y = mouse_in_canvas.y - (mouse_in_canvas.y - ui_state.scrolling.y) * zoom_factor;
+                ui_state.zoom *= zoom_factor;
+                if (ui_state.zoom < 0.2f) ui_state.zoom = 0.2f;
+                if (ui_state.zoom > 5.0f) ui_state.zoom = 5.0f;
+            }
+        }
+    } else {
+        ui_state.zoom = 1.0f;
+    }
+
+    // Draw fullscreen button at top right
+    ImGui::SetCursorScreenPos(ImVec2(canvas_pos.x + canvas_size.x - 70, canvas_pos.y + 10));
+    if (ImGui::Button(ui_state.is_fullscreen ? "Exit FS" : "Full Screen")) {
+        ui_state.is_fullscreen = !ui_state.is_fullscreen;
+        if (!ui_state.is_fullscreen) ui_state.zoom = 1.0f;
+    }
+    ImGui::SetItemAllowOverlap();
+
     if (ui_state.show_grid) {
-        float GRID_SZ = 32.0f;
+        float GRID_SZ = 32.0f * ui_state.zoom;
         ImU32 GRID_COLOR = IM_COL32(36, 34, 30, 255);
         for (float x = std::fmod(ui_state.scrolling.x, GRID_SZ); x < canvas_size.x; x += GRID_SZ) {
             draw_list->AddLine(ImVec2(canvas_pos.x + x, canvas_pos.y), ImVec2(canvas_pos.x + x, canvas_end.y), GRID_COLOR);
@@ -47,68 +73,76 @@ void PedalBoard::render_signal_chain() {
     float default_spacing_x = 40.0f;
     for (const auto& node : audio_graph.get_nodes()) {
         ui_state.set_default_position_if_missing(node.id, default_spacing_x, 60.0f);
-        default_spacing_x += 240.0f; 
+        default_spacing_x += 280.0f; 
 
         auto& node_layout = ui_state.node_positions[node.id];
-        ImVec2 node_screen_pos = ImVec2(offset.x + node_layout.position.x, offset.y + node_layout.position.y);
+        ImVec2 node_screen_pos = ImVec2(offset.x + node_layout.position.x * ui_state.zoom, offset.y + node_layout.position.y * ui_state.zoom);
 
-        float node_width = (node.routing_type == NodeRoutingType::StandardEffect) ? 160.0f : 110.0f;
-        float node_height = (node.routing_type == NodeRoutingType::StandardEffect) ? 320.0f : 70.0f;
-
-        ImGui::PushID(node.id);
-
+        PedalWidget* target_widget = nullptr;
         if (node.routing_type == NodeRoutingType::StandardEffect) {
-            PedalWidget* target_widget = nullptr;
             for (auto& w : widgets_) {
                 if (w->get_effect() == node.pedal) { target_widget = w.get(); break; }
             }
+        }
 
-            if (target_widget) {
-                ImGui::SetCursorScreenPos(node_screen_pos);
-                ImGui::BeginGroup();
-                target_widget->render(); 
-                ImGui::EndGroup();
+        float node_width = (target_widget ? 190.0f : 110.0f) * ui_state.zoom;
+        float node_height = (target_widget ? 360.0f : 70.0f) * ui_state.zoom;
 
-                ImGui::SetCursorScreenPos(node_screen_pos);
-                ImGui::InvisibleButton("native_drag_handle", ImVec2(node_width - 25.0f, 30.0f));
-                ImGui::SetItemAllowOverlap(); 
-                if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-                    node_layout.position.x += ImGui::GetIO().MouseDelta.x;
-                    node_layout.position.y += ImGui::GetIO().MouseDelta.y;
-                }
+        ImGui::PushID(node.id);
+
+
+        if (target_widget) {
+            ImGui::SetCursorScreenPos(node_screen_pos);
+            ImGui::BeginGroup();
+            ImGui::SetWindowFontScale(ui_state.zoom);
+            target_widget->render(); 
+            ImGui::SetWindowFontScale(1.0f);
+            ImGui::EndGroup();
+
+            ImGui::SetCursorScreenPos(node_screen_pos);
+            ImGui::InvisibleButton("native_drag_handle", ImVec2(node_width - 25.0f * ui_state.zoom, 30.0f * ui_state.zoom));
+            ImGui::SetItemAllowOverlap(); 
+            if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+                node_layout.position.x += ImGui::GetIO().MouseDelta.x / ui_state.zoom;
+                node_layout.position.y += ImGui::GetIO().MouseDelta.y / ui_state.zoom;
             }
         } else {
             ImVec2 node_end = ImVec2(node_screen_pos.x + node_width, node_screen_pos.y + node_height);
-            ImU32 bg_color = (node.routing_type == NodeRoutingType::Splitter) ? IM_COL32(30, 45, 60, 255) : IM_COL32(50, 35, 60, 255);
-            draw_list->AddRectFilled(node_screen_pos, node_end, bg_color, Theme::ROUNDING_MD);
-            draw_list->AddRect(node_screen_pos, node_end, IM_COL32(180, 140, 80, 180), Theme::ROUNDING_MD, 0, 1.5f);
+            ImU32 bg_color = IM_COL32(50, 35, 60, 255);
+            draw_list->AddRectFilled(node_screen_pos, node_end, bg_color, Theme::ROUNDING_MD * ui_state.zoom);
+            draw_list->AddRect(node_screen_pos, node_end, IM_COL32(180, 140, 80, 180), Theme::ROUNDING_MD * ui_state.zoom, 0, 1.5f * ui_state.zoom);
 
             ImGui::SetCursorScreenPos(node_screen_pos);
-            ImGui::InvisibleButton("util_drag_handle", ImVec2(node_width - 25.0f, node_height));
+            ImGui::InvisibleButton("util_drag_handle", ImVec2(node_width - 25.0f * ui_state.zoom, node_height));
             ImGui::SetItemAllowOverlap();
             if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-                node_layout.position.x += ImGui::GetIO().MouseDelta.x;
-                node_layout.position.y += ImGui::GetIO().MouseDelta.y;
+                node_layout.position.x += ImGui::GetIO().MouseDelta.x / ui_state.zoom;
+                node_layout.position.y += ImGui::GetIO().MouseDelta.y / ui_state.zoom;
             }
-            ImVec2 text_pos = ImVec2(node_screen_pos.x + 12.0f, node_screen_pos.y + 25.0f);
+            ImVec2 text_pos = ImVec2(node_screen_pos.x + 12.0f * ui_state.zoom, node_screen_pos.y + 25.0f * ui_state.zoom);
+            ImGui::SetWindowFontScale(ui_state.zoom);
             draw_list->AddText(text_pos, IM_COL32(255, 255, 255, 255), node.name.c_str());
+            ImGui::SetWindowFontScale(1.0f);
+        }
+
+        if (!node.is_reachable) {
+            ImVec2 node_end = ImVec2(node_screen_pos.x + node_width, node_screen_pos.y + node_height);
+            draw_list->AddRectFilled(node_screen_pos, node_end, IM_COL32(0, 0, 0, 180), Theme::ROUNDING_MD * ui_state.zoom);
+            
+            ImVec2 text_pos = ImVec2(node_screen_pos.x + 10.0f * ui_state.zoom, node_screen_pos.y + node_height - 25.0f * ui_state.zoom);
+            ImGui::SetWindowFontScale(ui_state.zoom * 0.9f);
+            draw_list->AddText(text_pos, IM_COL32(255, 60, 60, 255), "DISCONNECTED");
+            ImGui::SetWindowFontScale(1.0f);
         }
 
         // ====================================================================
         // THE DELETION [X] BUTTON
         // ====================================================================
         bool is_amp = (node.name == "Amp Sim"); 
+        bool is_input_node = (node.name == "Input");
 
-        if (!is_amp) {
-            ImVec2 cross_pos;
-            if (node.routing_type == NodeRoutingType::StandardEffect) {
-                // Standard pedals: Your exact original positioning
-                cross_pos = ImVec2(node_screen_pos.x + node_width + 10.0f, node_screen_pos.y + 2.0f);
-            } else {
-                // Splitter & Mixer: Tuck the cross safely inside the colored box bounds
-                cross_pos = ImVec2(node_screen_pos.x + node_width - 24.0f, node_screen_pos.y + 4.0f);
-            }
-
+        if (!is_amp && !is_input_node) {
+            ImVec2 cross_pos = ImVec2(node_screen_pos.x + node_width - 24.0f * ui_state.zoom, node_screen_pos.y + 4.0f * ui_state.zoom);
             ImGui::SetCursorScreenPos(cross_pos);
             
             // Your exact color styling
@@ -131,57 +165,73 @@ void PedalBoard::render_signal_chain() {
         // ====================================================================
         // FIX: THE WIRE DROP ZONE (Input Pins)
         // ====================================================================
-        for (size_t idx = 0; idx < node.input_pin_ids.size(); ++idx) {
-            int pin_id = node.input_pin_ids[idx];
-            float pin_y = node_screen_pos.y + (node_height * (idx + 1.0f) / (node.input_pin_ids.size() + 1.0f));
-            ImVec2 pin_pos(node_screen_pos.x - 2.0f, pin_y); 
-            pin_positions_cache[pin_id] = pin_pos;
+        if (!is_input_node) {
+            for (size_t idx = 0; idx < node.input_pin_ids.size(); ++idx) {
+                int pin_id = node.input_pin_ids[idx];
+                float pin_y = node_screen_pos.y + (node_height * (idx + 1.0f) / (node.input_pin_ids.size() + 1.0f));
+                ImVec2 pin_pos(node_screen_pos.x - 2.0f * ui_state.zoom, pin_y); 
+                pin_positions_cache[pin_id] = pin_pos;
 
-            draw_list->AddCircleFilled(pin_pos, 5.0f, IM_COL32(46, 204, 113, 255)); 
-            draw_list->AddCircle(pin_pos, 6.5f, IM_COL32(255, 255, 255, 200));
+                draw_list->AddCircleFilled(pin_pos, 5.0f * ui_state.zoom, IM_COL32(46, 204, 113, 255)); 
+                draw_list->AddCircle(pin_pos, 6.5f * ui_state.zoom, IM_COL32(255, 255, 255, 200));
 
-            ImGui::SetCursorScreenPos(ImVec2(pin_pos.x - 10.0f, pin_pos.y - 10.0f));
-            ImGui::PushID(pin_id);
-            ImGui::InvisibleButton("in_pin", ImVec2(20.0f, 20.0f));
-            
-            // Check if hovered while releasing a dragged wire
-            if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-                if (ui_state.active_src_pin_id != -1) {
-                    audio_graph.add_link(ui_state.active_src_pin_id, pin_id);
-                    engine_.commit_graph_changes();
-                    ui_state.active_src_pin_id = -1;
+                ImGui::SetCursorScreenPos(ImVec2(pin_pos.x - 10.0f * ui_state.zoom, pin_pos.y - 10.0f * ui_state.zoom));
+                ImGui::PushID(pin_id);
+                ImGui::InvisibleButton("in_pin", ImVec2(20.0f * ui_state.zoom, 20.0f * ui_state.zoom));
+                
+                // Check if hovered while releasing a dragged wire
+                if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+                    if (ui_state.active_src_pin_id != -1) {
+                        audio_graph.add_link(ui_state.active_src_pin_id, pin_id);
+                        engine_.commit_graph_changes();
+                        ui_state.active_src_pin_id = -1;
+                    }
                 }
+                ImGui::SetItemAllowOverlap();
+                ImGui::PopID();
             }
-            ImGui::SetItemAllowOverlap();
-            ImGui::PopID();
         }
 
         // ====================================================================
         // FIX: THE WIRE DRAG START (Output Pins)
         // ====================================================================
-        for (size_t idx = 0; idx < node.output_pin_ids.size(); ++idx) {
-            int pin_id = node.output_pin_ids[idx];
-            float pin_y = node_screen_pos.y + (node_height * (idx + 1.0f) / (node.output_pin_ids.size() + 1.0f));
-            ImVec2 pin_pos(node_screen_pos.x + node_width + 2.0f, pin_y);
-            pin_positions_cache[pin_id] = pin_pos;
+        if (!is_amp) {
+            for (size_t idx = 0; idx < node.output_pin_ids.size(); ++idx) {
+                int pin_id = node.output_pin_ids[idx];
+                float pin_y = node_screen_pos.y + (node_height * (idx + 1.0f) / (node.output_pin_ids.size() + 1.0f));
+                ImVec2 pin_pos(node_screen_pos.x + node_width + 2.0f * ui_state.zoom, pin_y);
+                pin_positions_cache[pin_id] = pin_pos;
 
-            // Track active wire position to snap to the pin perfectly
-            if (ui_state.active_src_pin_id == pin_id) ui_state.active_src_pin_pos = pin_pos;
+                // Track active wire position to snap to the pin perfectly
+                if (ui_state.active_src_pin_id == pin_id) ui_state.active_src_pin_pos = pin_pos;
 
-            draw_list->AddCircleFilled(pin_pos, 5.0f, IM_COL32(231, 76, 60, 255)); 
-            draw_list->AddCircle(pin_pos, 6.5f, IM_COL32(255, 255, 255, 200));
+                draw_list->AddCircleFilled(pin_pos, 5.0f * ui_state.zoom, IM_COL32(231, 76, 60, 255)); 
+                draw_list->AddCircle(pin_pos, 6.5f * ui_state.zoom, IM_COL32(255, 255, 255, 200));
 
-            ImGui::SetCursorScreenPos(ImVec2(pin_pos.x - 10.0f, pin_pos.y - 10.0f));
-            ImGui::PushID(pin_id);
-            ImGui::InvisibleButton("out_pin", ImVec2(20.0f, 20.0f));
-            
-            // Start drafting wire instantly on Mouse DOWN
-            if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                ui_state.active_src_pin_id = pin_id;
-                ui_state.active_src_pin_pos = pin_pos;
+                ImGui::SetCursorScreenPos(ImVec2(pin_pos.x - 10.0f * ui_state.zoom, pin_pos.y - 10.0f * ui_state.zoom));
+                ImGui::PushID(pin_id);
+                ImGui::InvisibleButton("out_pin", ImVec2(20.0f * ui_state.zoom, 20.0f * ui_state.zoom));
+                
+                // Start drafting wire instantly on Mouse DOWN or delete on right click
+                if (ImGui::IsItemHovered()) {
+                    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                        ui_state.active_src_pin_id = pin_id;
+                        ui_state.active_src_pin_pos = pin_pos;
+                    } else if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+                        bool deleted_any = false;
+                        auto links = audio_graph.get_links(); // copy
+                        for (const auto& l : links) {
+                            if (l.source_pin_id == pin_id) {
+                                audio_graph.remove_link(l.id);
+                                deleted_any = true;
+                            }
+                        }
+                        if (deleted_any) engine_.commit_graph_changes();
+                    }
+                }
+                ImGui::SetItemAllowOverlap();
+                ImGui::PopID();
             }
-            ImGui::SetItemAllowOverlap();
-            ImGui::PopID();
         }
 
         ImGui::PopID();
@@ -196,15 +246,42 @@ void PedalBoard::render_signal_chain() {
  }
 
     // Draw Patch Cables
+    int link_to_delete = -1;
     for (const auto& link : audio_graph.get_links()) {
         if (pin_positions_cache.count(link.source_pin_id) && pin_positions_cache.count(link.dest_pin_id)) {
             ImVec2 p1 = pin_positions_cache[link.source_pin_id];
             ImVec2 p2 = pin_positions_cache[link.dest_pin_id];
             
-            ImVec2 cp1 = ImVec2(p1.x + 45.0f, p1.y);
-            ImVec2 cp2 = ImVec2(p2.x - 45.0f, p2.y);
-            draw_list->AddBezierCubic(p1, cp1, cp2, p2, IM_COL32(212, 175, 55, 255), 3.0f);
+            ImVec2 cp1 = ImVec2(p1.x + 45.0f * ui_state.zoom, p1.y);
+            ImVec2 cp2 = ImVec2(p2.x - 45.0f * ui_state.zoom, p2.y);
+
+            // Distance detection for hovering/clicking
+            bool hovered = false;
+            ImVec2 mouse_pos = ImGui::GetMousePos();
+            for (float t = 0.0f; t <= 1.0f; t += 0.1f) {
+                float u = 1.0f - t;
+                float px = (u*u*u) * p1.x + (3*u*u*t) * cp1.x + (3*u*t*t) * cp2.x + (t*t*t) * p2.x;
+                float py = (u*u*u) * p1.y + (3*u*u*t) * cp1.y + (3*u*t*t) * cp2.y + (t*t*t) * p2.y;
+                float dx = px - mouse_pos.x;
+                float dy = py - mouse_pos.y;
+                if (dx * dx + dy * dy < 100.0f * ui_state.zoom * ui_state.zoom) {
+                    hovered = true;
+                    break;
+                }
+            }
+
+            ImU32 color = hovered ? IM_COL32(255, 100, 100, 255) : IM_COL32(212, 175, 55, 255);
+            draw_list->AddBezierCubic(p1, cp1, cp2, p2, color, hovered ? 5.0f * ui_state.zoom : 3.0f * ui_state.zoom);
+
+            if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                link_to_delete = link.id;
+            }
         }
+    }
+    
+    if (link_to_delete != -1) {
+        audio_graph.remove_link(link_to_delete);
+        engine_.commit_graph_changes();
     }
 
     // Draw Wire Spline Drafting

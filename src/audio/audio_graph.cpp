@@ -1,6 +1,7 @@
 #include "audio/audio_graph.h"
 #include <deque>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace Amplitron {
 
@@ -12,18 +13,15 @@ int AudioGraph::add_node(const std::string& name, NodeRoutingType type, std::sha
     node.pedal = pedal;
 
     // Dynamically configure pin structures using the same unified ID pool
-    if (type == NodeRoutingType::Splitter) {
-    node.input_pin_ids.push_back(next_id_++);  // 1 Input Pin
-    node.output_pin_ids.push_back(next_id_++); // Output Pin Branch A
-    node.output_pin_ids.push_back(next_id_++); // Output Pin Branch B
-} else if (type == NodeRoutingType::Mixer || type == NodeRoutingType::MergeSum) {
-    node.input_pin_ids.push_back(next_id_++);  // Input Pin Branch A
-    node.input_pin_ids.push_back(next_id_++);  // Input Pin Branch B
-    node.output_pin_ids.push_back(next_id_++); // 1 Output Pin
-} else {
-    node.input_pin_ids.push_back(next_id_++);  
-    node.output_pin_ids.push_back(next_id_++); 
-}
+    if (type == NodeRoutingType::Mixer || type == NodeRoutingType::MergeSum) {
+        node.input_pin_ids.push_back(next_id_++);  // Input Pin Branch A
+        node.input_pin_ids.push_back(next_id_++);  // Input Pin Branch B
+        node.output_pin_ids.push_back(next_id_++); // 1 Output Pin
+    } else {
+        node.input_pin_ids.push_back(next_id_++);  
+        node.output_pin_ids.push_back(next_id_++); 
+        node.output_pin_ids.push_back(next_id_++); // Multi-output support (2 pins by default)
+    }
 
     nodes_.push_back(node);
     
@@ -38,6 +36,13 @@ int AudioGraph::add_link(int source_pin_id, int dest_pin_id) {
     for (const auto& existing_link : links_) {
         if (existing_link.source_pin_id == source_pin_id && existing_link.dest_pin_id == dest_pin_id) {
             return existing_link.id; 
+        }
+    }
+
+    // Enforce that each input pin can only have ONE incoming link
+    for (const auto& existing_link : links_) {
+        if (existing_link.dest_pin_id == dest_pin_id) {
+            return -1; // Pin already in use!
         }
     }
 
@@ -96,6 +101,68 @@ bool AudioGraph::rebuild_topology() {
     // Kahn's sort dependency tracker to map links to execution order.
     
     sorted_node_ids_.clear();
+
+    // 1. Forward Reachability BFS
+    std::unordered_set<int> forward_reachable;
+    std::vector<int> queue;
+    for (const auto& node : nodes_) {
+        if (node.is_graph_input) {
+            queue.push_back(node.id);
+            forward_reachable.insert(node.id);
+        }
+    }
+    size_t head = 0;
+    while (head < queue.size()) {
+        int curr = queue[head++];
+        auto it = std::find_if(nodes_.begin(), nodes_.end(), [&](const DSPNode& n){ return n.id == curr; });
+        if (it != nodes_.end()) {
+            for (int out_pin : it->output_pin_ids) {
+                for (const auto& link : links_) {
+                    if (link.source_pin_id == out_pin) {
+                        int dest = get_node_from_pin(link.dest_pin_id);
+                        if (dest != -1 && forward_reachable.find(dest) == forward_reachable.end()) {
+                            forward_reachable.insert(dest);
+                            queue.push_back(dest);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Backward Reachability BFS
+    std::unordered_set<int> backward_reachable;
+    queue.clear();
+    for (const auto& node : nodes_) {
+        if (node.is_graph_output) {
+            queue.push_back(node.id);
+            backward_reachable.insert(node.id);
+        }
+    }
+    head = 0;
+    while (head < queue.size()) {
+        int curr = queue[head++];
+        auto it = std::find_if(nodes_.begin(), nodes_.end(), [&](const DSPNode& n){ return n.id == curr; });
+        if (it != nodes_.end()) {
+            for (int in_pin : it->input_pin_ids) {
+                for (const auto& link : links_) {
+                    if (link.dest_pin_id == in_pin) {
+                        int src = get_node_from_pin(link.source_pin_id);
+                        if (src != -1 && backward_reachable.find(src) == backward_reachable.end()) {
+                            backward_reachable.insert(src);
+                            queue.push_back(src);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Update is_reachable for all nodes
+    for (auto& node : nodes_) {
+        node.is_reachable = (forward_reachable.count(node.id) > 0 && backward_reachable.count(node.id) > 0);
+    }
+
     std::unordered_map<int, int> in_degree;
     
     // Initialize in-degree count for all active nodes
@@ -120,7 +187,7 @@ bool AudioGraph::rebuild_topology() {
     }
     
     // Topologically extract nodes from the dependency queue
-    size_t head = 0;
+    head = 0;
     while (head < process_queue.size()) {
         int current_node_id = process_queue[head++];
         sorted_node_ids_.push_back(current_node_id);
@@ -171,6 +238,16 @@ bool AudioGraph::remove_node(int node_id) {
         
         // 3. Erase the node and recompile the audio thread topology
         nodes_.erase(it);
+        rebuild_topology();
+        return true;
+    }
+    return false;
+}
+bool AudioGraph::remove_link(int link_id) {
+    auto it = std::remove_if(links_.begin(), links_.end(),
+                             [link_id](const GraphLink& l) { return l.id == link_id; });
+    if (it != links_.end()) {
+        links_.erase(it, links_.end());
         rebuild_topology();
         return true;
     }

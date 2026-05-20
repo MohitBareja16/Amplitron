@@ -50,7 +50,7 @@ void AudioGraphExecutor::compile(const AudioGraph& graph) {
     // Build the flat execution array
     for (int node_id : sorted_ids) {
         auto it = std::find_if(nodes.begin(), nodes.end(), [&](const DSPNode& n){ return n.id == node_id; });
-        if (it == nodes.end()) continue;
+        if (it == nodes.end() || !it->is_reachable) continue;
 
         NodeExecutionStep step;
         step.node_id = node_id;

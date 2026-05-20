@@ -8,18 +8,25 @@ void AudioEngine::sync_graph_with_dummy_effects() {
         std::lock_guard<std::mutex> lock(effect_mutex_);
         // 1. Reset the main graph model completely
         main_graph_ = AudioGraph();
-        int prev_output_pin = -1;
+        
+        int input_node_id = main_graph_.add_node("Input", NodeRoutingType::StandardEffect, nullptr);
+        main_graph_.set_node_as_input(input_node_id, true);
+        
+        int prev_output_pin = main_graph_.get_nodes().back().output_pin_ids.empty() ? -1 : main_graph_.get_nodes().back().output_pin_ids[0];
         
         // 2. Loop through the linear pedals and wire them back-to-back in the DAG
         for (auto& fx : dummy_effects_) {
             fx->set_sample_rate(sample_rate_);
             fx->reset();
-            main_graph_.add_node(fx->name(), NodeRoutingType::StandardEffect, fx);
+            int node_id = main_graph_.add_node(fx->name(), NodeRoutingType::StandardEffect, fx);
+            
+            if (std::string(fx->name()) == "Amp Sim") {
+                main_graph_.set_node_as_output(node_id, true);
+            }
             
             const auto& nodes = main_graph_.get_nodes();
             if (nodes.empty()) continue;
             const auto& current_node = nodes.back();
-            
             // Connect the previous pedal's output pin to this pedal's input pin
             if (prev_output_pin != -1 && !current_node.input_pin_ids.empty()) {
                 main_graph_.add_link(prev_output_pin, current_node.input_pin_ids[0]);

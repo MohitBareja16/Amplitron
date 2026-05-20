@@ -44,7 +44,7 @@ TEST(audio_graph_parallel_split_merge) {
     
     // FIX: Link merges directly to the universal input pin of the Merge node
     graph.add_link(nodes[1].output_pin_ids[0], nodes[3].input_pin_ids[0]);
-    graph.add_link(nodes[2].output_pin_ids[0], nodes[3].input_pin_ids[0]);
+    graph.add_link(nodes[2].output_pin_ids[0], nodes[3].input_pin_ids[1]);
     
     ASSERT_TRUE(graph.rebuild_topology());
     const auto& sorted = graph.get_sorted_nodes();
@@ -88,6 +88,9 @@ TEST(audio_graph_dsp_processing) {
     int p3 = graph.add_node("Path B", NodeRoutingType::StandardEffect);
     int m4 = graph.add_node("Merge", NodeRoutingType::MergeSum);
 
+    graph.set_node_as_input(p1, true);
+    graph.set_node_as_output(m4, true);
+
     auto nodes = graph.get_nodes();
     // P1 -> P2 & P3 (Split)
     graph.add_link(nodes[0].output_pin_ids[0], nodes[1].input_pin_ids[0]);
@@ -96,7 +99,7 @@ TEST(audio_graph_dsp_processing) {
     // P2 & P3 -> M4 (Merge)
     nodes = graph.get_nodes();
     graph.add_link(nodes[1].output_pin_ids[0], nodes[3].input_pin_ids[0]);
-    graph.add_link(nodes[2].output_pin_ids[0], nodes[3].input_pin_ids[0]);
+    graph.add_link(nodes[2].output_pin_ids[0], nodes[3].input_pin_ids[1]);
 
     ASSERT_TRUE(graph.rebuild_topology());
     executor.compile(graph);
@@ -130,9 +133,11 @@ TEST(audio_graph_explicit_inputs_sinks) {
     int nA = graph.add_node("Input Node", NodeRoutingType::StandardEffect);
     graph.add_node("Unwired Node", NodeRoutingType::StandardEffect);
     int nC = graph.add_node("Sink C", NodeRoutingType::StandardEffect);
-    graph.add_node("Sink D", NodeRoutingType::StandardEffect);
+    int nD = graph.add_node("Sink D", NodeRoutingType::StandardEffect);
 
     graph.set_node_as_input(nA, true);
+    graph.set_node_as_output(nC, true);
+    graph.set_node_as_output(nD, true);
     
     // Wire: A -> C and A -> D
     auto nodes = graph.get_nodes();
@@ -153,6 +158,8 @@ TEST(audio_graph_explicit_inputs_sinks) {
 
     // Case B: Explicitly designate nC as the ONLY output.
     graph.set_node_as_output(nC, true);
+    graph.set_node_as_output(nD, false);
+    ASSERT_TRUE(graph.rebuild_topology());
     executor.compile(graph);
     std::fill(output_audio.begin(), output_audio.end(), 0.0f);
     executor.process(input_audio.data(), output_audio.data(), 64);

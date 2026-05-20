@@ -12,7 +12,6 @@ class Effect;
 
 enum class NodeRoutingType {
     StandardEffect,
-    Splitter,
     Mixer,
     MergeSum = Mixer
 };
@@ -28,6 +27,7 @@ struct DSPNode {
 
     bool is_graph_input = false;
     bool is_graph_output = false;
+    bool is_reachable = true;
 };
 
 struct GraphLink {
