@@ -116,3 +116,47 @@ TEST(audio_graph_dsp_processing) {
     // The final output should be strictly 2.0f.
     ASSERT_TRUE(output_audio[0] == 2.0f);
 }
+
+// 5. Test Explicit Inputs, Outputs/Sinks, and Silence of Unwired Nodes
+TEST(audio_graph_explicit_inputs_sinks) {
+    AudioGraph graph;
+    AudioGraphExecutor executor;
+    executor.prepare(48000, 128);
+
+    // Create 4 standard nodes:
+    // Node A (designated input)
+    // Node B (unwired, should be silent)
+    // Node C & Node D (both sinks, should mix their outputs)
+    int nA = graph.add_node("Input Node", NodeRoutingType::StandardEffect);
+    graph.add_node("Unwired Node", NodeRoutingType::StandardEffect);
+    int nC = graph.add_node("Sink C", NodeRoutingType::StandardEffect);
+    graph.add_node("Sink D", NodeRoutingType::StandardEffect);
+
+    graph.set_node_as_input(nA, true);
+    
+    // Wire: A -> C and A -> D
+    auto nodes = graph.get_nodes();
+    graph.add_link(nodes[0].output_pin_ids[0], nodes[2].input_pin_ids[0]);
+    graph.add_link(nodes[0].output_pin_ids[0], nodes[3].input_pin_ids[0]);
+
+    ASSERT_TRUE(graph.rebuild_topology());
+    executor.compile(graph);
+
+    std::vector<float> input_audio(64, 1.0f);
+    std::vector<float> output_audio(64, 0.0f);
+
+    executor.process(input_audio.data(), output_audio.data(), 64);
+
+    // Case A: Sinks (nB, nC, nD) all contribute. nB is silent, nC and nD output 1.0f.
+    // Mixed output: 1.0f + 1.0f = 2.0f.
+    ASSERT_TRUE(output_audio[0] == 2.0f);
+
+    // Case B: Explicitly designate nC as the ONLY output.
+    graph.set_node_as_output(nC, true);
+    executor.compile(graph);
+    std::fill(output_audio.begin(), output_audio.end(), 0.0f);
+    executor.process(input_audio.data(), output_audio.data(), 64);
+    
+    // Only nC's output contributes: 1.0f.
+    ASSERT_TRUE(output_audio[0] == 1.0f);
+}

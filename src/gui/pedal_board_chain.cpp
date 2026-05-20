@@ -178,6 +178,7 @@ void PedalBoard::render_signal_chain() {
             // Start drafting wire instantly on Mouse DOWN
             if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
                 ui_state.active_src_pin_id = pin_id;
+                ui_state.active_src_pin_pos = pin_pos;
             }
             ImGui::SetItemAllowOverlap();
             ImGui::PopID();
@@ -187,10 +188,12 @@ void PedalBoard::render_signal_chain() {
     }
 
     // Process Deletions safely after iterating
-    if (node_to_delete != -1) {
+     if (node_to_delete != -1) {
         audio_graph.remove_node(node_to_delete);
+        ui_state.node_positions.erase(node_to_delete);
+        ui_state.active_src_pin_id = -1; // avoid stale pin state after topology change
         engine_.commit_graph_changes();
-    }
+ }
 
     // Draw Patch Cables
     for (const auto& link : audio_graph.get_links()) {

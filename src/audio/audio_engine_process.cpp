@@ -132,6 +132,8 @@ void AudioEngine::process_audio(const float* input, float* output, int frame_cou
     if (audio_shadow_executor_) {
         // Pass your mono/stereo buffers to the executor we built
         audio_shadow_executor_->process(process_buffer_.data(), process_buffer_right_.data(), frame_count);
+        std::memcpy(process_buffer_.data(), process_buffer_right_.data(),
++                    static_cast<size_t>(frame_count) * sizeof(float));
     }
 
     float out_gain = output_gain_.load(std::memory_order_relaxed);
@@ -255,10 +257,14 @@ void AudioEngine::drain_commands() {
     AudioCommand cmd;
     while (command_queue_.try_pop(cmd)) {
         
-        // Helper to find the effect pointer safely inside the new Graph architecture
-        auto get_effect = [&](int node_id) -> std::shared_ptr<Effect> {
+        // Helper to find the effect pointer safely inside the new Graph architecture by chain index
+        auto get_effect = [&](int effect_index) -> std::shared_ptr<Effect> {
+            int current_idx = 0;
             for (const auto& node : main_graph_.get_nodes()) {
-                if (node.id == node_id) return node.pedal;
+                if (node.pedal) {
+                    if (current_idx == effect_index) return node.pedal;
+                    current_idx++;
+                }
             }
             return nullptr;
         };

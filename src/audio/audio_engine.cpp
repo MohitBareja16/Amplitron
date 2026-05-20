@@ -103,5 +103,6 @@ void AudioEngine::commit_graph_changes() {
     
     // 3. Promote it to the main slot. The audio thread will grab it on the next try_lock!
     main_executor_ = new_executor;
+    topology_dirty_.store(true, std::memory_order_release);
 }
 }

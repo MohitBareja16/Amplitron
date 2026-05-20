@@ -25,6 +25,9 @@ struct DSPNode {
     
     std::vector<int> input_pin_ids;
     std::vector<int> output_pin_ids;
+
+    bool is_graph_input = false;
+    bool is_graph_output = false;
 };
 
 struct GraphLink {
@@ -43,6 +46,9 @@ public:
     bool remove_node(int node_id);
     int add_link(int source_pin_id, int dest_pin_id);
     bool remove_link(int link_id);
+    
+    void set_node_as_input(int node_id, bool is_input);
+    void set_node_as_output(int node_id, bool is_output);
 
     // Topological Order & Loop Validation Core
     bool rebuild_topology();

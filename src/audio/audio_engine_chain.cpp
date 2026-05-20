@@ -4,26 +4,31 @@
 namespace Amplitron {
 
 void AudioEngine::sync_graph_with_dummy_effects() {
-    // 1. Reset the main graph model completely
-    main_graph_ = AudioGraph();
-    int prev_output_pin = -1;
-    
-    // 2. Loop through the linear pedals and wire them back-to-back in the DAG
-    for (auto& fx : dummy_effects_) {
-        int node_id = main_graph_.add_node(fx->name(), NodeRoutingType::StandardEffect, fx);
+    {
+        std::lock_guard<std::mutex> lock(effect_mutex_);
+        // 1. Reset the main graph model completely
+        main_graph_ = AudioGraph();
+        int prev_output_pin = -1;
         
-        const auto& nodes = main_graph_.get_nodes();
-        if (nodes.empty()) continue;
-        const auto& current_node = nodes.back();
-        
-        // Connect the previous pedal's output pin to this pedal's input pin
-        if (prev_output_pin != -1 && !current_node.input_pin_ids.empty()) {
-            main_graph_.add_link(prev_output_pin, current_node.input_pin_ids[0]);
-        }
-        
-        // Track this pedal's output pin for the next connection downstream
-        if (!current_node.output_pin_ids.empty()) {
-            prev_output_pin = current_node.output_pin_ids[0];
+        // 2. Loop through the linear pedals and wire them back-to-back in the DAG
+        for (auto& fx : dummy_effects_) {
+            fx->set_sample_rate(sample_rate_);
+            fx->reset();
+            main_graph_.add_node(fx->name(), NodeRoutingType::StandardEffect, fx);
+            
+            const auto& nodes = main_graph_.get_nodes();
+            if (nodes.empty()) continue;
+            const auto& current_node = nodes.back();
+            
+            // Connect the previous pedal's output pin to this pedal's input pin
+            if (prev_output_pin != -1 && !current_node.input_pin_ids.empty()) {
+                main_graph_.add_link(prev_output_pin, current_node.input_pin_ids[0]);
+            }
+            
+            // Track this pedal's output pin for the next connection downstream
+            if (!current_node.output_pin_ids.empty()) {
+                prev_output_pin = current_node.output_pin_ids[0];
+            }
         }
     }
     

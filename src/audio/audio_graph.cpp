@@ -52,10 +52,29 @@ int AudioGraph::add_link(int source_pin_id, int dest_pin_id) {
     if (!rebuild_topology()) {
         // If a feedback loop is detected, pop the dangerous link back off to keep the engine safe
         links_.pop_back();
+        rebuild_topology();
         return -1; 
     }
 
     return link.id;
+}
+
+void AudioGraph::set_node_as_input(int node_id, bool is_input) {
+    for (auto& node : nodes_) {
+        if (node.id == node_id) {
+            node.is_graph_input = is_input;
+            break;
+        }
+    }
+}
+
+void AudioGraph::set_node_as_output(int node_id, bool is_output) {
+    for (auto& node : nodes_) {
+        if (node.id == node_id) {
+            node.is_graph_output = is_output;
+            break;
+        }
+    }
 }
 
 int AudioGraph::get_node_from_pin(int pin_id) const {

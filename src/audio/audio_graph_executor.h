@@ -39,9 +39,15 @@ private:
         NodeRoutingType type;
         std::shared_ptr<Effect> pedal;
         std::vector<InputSource> input_sources; // Which buffers to sum together for the input
+        bool is_graph_input = false;
+        bool is_graph_output = false;
+        bool is_sink = false;
     };
 
     std::vector<NodeExecutionStep> execution_plan_;
+    
+    bool any_explicit_input_ = false;
+    int fallback_input_node_id_ = -1;
 
     // Pre-allocated memory for routing parallel signal streams: [node_capacity][max_block_size]
     std::vector<std::vector<float>> buffer_pool_;
