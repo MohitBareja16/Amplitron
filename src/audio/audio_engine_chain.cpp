@@ -22,9 +22,7 @@ void AudioEngine::sync_graph_with_dummy_effects() {
                 fx->reset();
                 int node_id = main_graph_.add_node(fx->name(), NodeRoutingType::StandardEffect, fx);
                 
-                if (std::string(fx->name()) == "Amp Sim") {
-                    main_graph_.set_node_as_output(node_id, true);
-                }
+                // Output routing will be handled dynamically at the end
                 
                 const auto& nodes = main_graph_.get_nodes();
                 if (nodes.empty()) continue;
@@ -34,10 +32,14 @@ void AudioEngine::sync_graph_with_dummy_effects() {
                     main_graph_.add_link(prev_output_pin, current_node.input_pin_ids[0]);
                 }
                 
-                // Track this pedal's output pin for the next connection downstream
                 if (!current_node.output_pin_ids.empty()) {
                     prev_output_pin = current_node.output_pin_ids[0];
                 }
+            }
+            
+            // Mark the last node in the linear chain as the Output so sound reaches the speakers
+            if (!main_graph_.get_nodes().empty()) {
+                main_graph_.set_node_as_output(main_graph_.get_nodes().back().id, true);
             }
         } else {
             // 2. MODULAR MODE: Remove standard nodes that are no longer in dummy_effects_

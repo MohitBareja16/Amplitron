@@ -82,13 +82,18 @@ void PedalBoard::render_signal_chain() {
     // Give all new nodes a default position at the end of the chain without shifting existing nodes
     for (const auto& node : audio_graph.get_nodes()) {
         if (ui_state.node_positions.find(node.id) == ui_state.node_positions.end()) {
-            float max_x = 40.0f;
-            for (const auto& pair : ui_state.node_positions) {
-                if (pair.second.position.x > max_x) {
-                    max_x = pair.second.position.x;
+            float max_right = 40.0f;
+            for (const auto& existing_node : audio_graph.get_nodes()) {
+                auto pos_it = ui_state.node_positions.find(existing_node.id);
+                if (pos_it != ui_state.node_positions.end()) {
+                    float width = (existing_node.routing_type == NodeRoutingType::StandardEffect) ? 190.0f : 110.0f;
+                    float right_edge = pos_it->second.position.x + width;
+                    if (right_edge > max_right) {
+                        max_right = right_edge;
+                    }
                 }
             }
-            float insert_x = ui_state.node_positions.empty() ? 40.0f : max_x + 280.0f;
+            float insert_x = ui_state.node_positions.empty() ? 40.0f : max_right + 80.0f;
             ui_state.node_positions[node.id] = { ImVec2(insert_x, 60.0f), false };
         }
     }
