@@ -18,30 +18,38 @@ void PedalBoard::render_signal_chain() {
     ImVec2 canvas_end = ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y);
 
     ImGui::SetCursorScreenPos(canvas_pos);
-    ImGui::InvisibleButton("canvas_panning_hotspot", canvas_size, ImGuiButtonFlags_MouseButtonRight);
+    ImGuiButtonFlags btn_flags = ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle;
+    if (ui_state.hand_tool_active) {
+        btn_flags |= ImGuiButtonFlags_MouseButtonLeft;
+    }
+    
+    ImGui::InvisibleButton("canvas_panning_hotspot", canvas_size, btn_flags);
     ImGui::SetItemAllowOverlap();
     
-    if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
+    if (ui_state.hand_tool_active && ImGui::IsItemHovered()) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+    }
+    
+    if (ImGui::IsItemActive() && (ImGui::IsMouseDragging(ImGuiMouseButton_Right) || 
+                                  ImGui::IsMouseDragging(ImGuiMouseButton_Middle) || 
+                                  (ui_state.hand_tool_active && ImGui::IsMouseDragging(ImGuiMouseButton_Left)))) {
         ui_state.scrolling.x += ImGui::GetIO().MouseDelta.x;
         ui_state.scrolling.y += ImGui::GetIO().MouseDelta.y;
     }
 
-    if (ui_state.is_fullscreen) {
-        if (ImGui::IsItemHovered()) {
-            float scroll_y = ImGui::GetIO().MouseWheel;
-            if (scroll_y != 0.0f) {
-                float zoom_factor = (scroll_y > 0) ? 1.1f : (1.0f / 1.1f);
-                ImVec2 mouse_pos = ImGui::GetMousePos();
-                ImVec2 mouse_in_canvas = ImVec2(mouse_pos.x - canvas_pos.x, mouse_pos.y - canvas_pos.y);
-                ui_state.scrolling.x = mouse_in_canvas.x - (mouse_in_canvas.x - ui_state.scrolling.x) * zoom_factor;
-                ui_state.scrolling.y = mouse_in_canvas.y - (mouse_in_canvas.y - ui_state.scrolling.y) * zoom_factor;
-                ui_state.zoom *= zoom_factor;
-                if (ui_state.zoom < 0.2f) ui_state.zoom = 0.2f;
-                if (ui_state.zoom > 5.0f) ui_state.zoom = 5.0f;
-            }
+    // Zooming is now allowed in both fullscreen and normal modes
+    if (ImGui::IsItemHovered()) {
+        float scroll_y = ImGui::GetIO().MouseWheel;
+        if (scroll_y != 0.0f) {
+            float zoom_factor = (scroll_y > 0) ? 1.1f : (1.0f / 1.1f);
+            ImVec2 mouse_pos = ImGui::GetMousePos();
+            ImVec2 mouse_in_canvas = ImVec2(mouse_pos.x - canvas_pos.x, mouse_pos.y - canvas_pos.y);
+            ui_state.scrolling.x = mouse_in_canvas.x - (mouse_in_canvas.x - ui_state.scrolling.x) * zoom_factor;
+            ui_state.scrolling.y = mouse_in_canvas.y - (mouse_in_canvas.y - ui_state.scrolling.y) * zoom_factor;
+            ui_state.zoom *= zoom_factor;
+            if (ui_state.zoom < 0.2f) ui_state.zoom = 0.2f;
+            if (ui_state.zoom > 5.0f) ui_state.zoom = 5.0f;
         }
-    } else {
-        ui_state.zoom = 1.0f;
     }
 
     // Draw fullscreen button at top right
@@ -70,10 +78,64 @@ void PedalBoard::render_signal_chain() {
 
     int node_to_delete = -1; // Safely track deletions outside the render loop
 
-    float default_spacing_x = 40.0f;
+    // Ensure all nodes have a default position using predecessor-based shifting algorithm
+    for (int node_id : audio_graph.get_sorted_nodes()) {
+        if (ui_state.node_positions.find(node_id) == ui_state.node_positions.end()) {
+            float insert_x = 40.0f;
+            float insert_y = 60.0f;
+            bool found_pred = false;
+            
+            const auto& sorted_ids = audio_graph.get_sorted_nodes();
+            auto it = std::find(sorted_ids.begin(), sorted_ids.end(), node_id);
+            if (it != sorted_ids.end()) {
+                auto pred_it = it;
+                while (pred_it != sorted_ids.begin()) {
+                    pred_it--;
+                    int pred_id = *pred_it;
+                    auto pos_it = ui_state.node_positions.find(pred_id);
+                    if (pos_it != ui_state.node_positions.end()) {
+                        insert_x = pos_it->second.position.x + 280.0f;
+                        insert_y = pos_it->second.position.y;
+                        found_pred = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!found_pred) {
+                float max_x = 40.0f;
+                for (const auto& pair : ui_state.node_positions) {
+                    if (pair.second.position.x > max_x) {
+                        max_x = pair.second.position.x;
+                    }
+                }
+                insert_x = ui_state.node_positions.empty() ? 40.0f : max_x + 280.0f;
+            }
+            
+            // Shift all downstream nodes to the right to make room for the new node
+            for (auto& pair : ui_state.node_positions) {
+                if (pair.second.position.x >= insert_x - 10.0f) {
+                    pair.second.position.x += 280.0f;
+                }
+            }
+            
+            ui_state.node_positions[node_id] = { ImVec2(insert_x, insert_y), false };
+        }
+    }
+
+    // Fallback for any disconnected/unreachable nodes not in the sorted graph
+    float fallback_spacing_x = 40.0f;
     for (const auto& node : audio_graph.get_nodes()) {
-        ui_state.set_default_position_if_missing(node.id, default_spacing_x, 60.0f);
-        default_spacing_x += 280.0f; 
+        if (ui_state.node_positions.find(node.id) == ui_state.node_positions.end()) {
+            float max_x = fallback_spacing_x;
+            for (const auto& pair : ui_state.node_positions) {
+                if (pair.second.position.x > max_x) max_x = pair.second.position.x;
+            }
+            ui_state.node_positions[node.id] = { ImVec2(max_x + 280.0f, 60.0f), false };
+        }
+    }
+
+    for (const auto& node : audio_graph.get_nodes()) {
 
         auto& node_layout = ui_state.node_positions[node.id];
         ImVec2 node_screen_pos = ImVec2(offset.x + node_layout.position.x * ui_state.zoom, offset.y + node_layout.position.y * ui_state.zoom);
@@ -102,7 +164,7 @@ void PedalBoard::render_signal_chain() {
             ImGui::SetCursorScreenPos(node_screen_pos);
             ImGui::InvisibleButton("native_drag_handle", ImVec2(node_width - 25.0f * ui_state.zoom, 30.0f * ui_state.zoom));
             ImGui::SetItemAllowOverlap(); 
-            if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+            if (!ui_state.hand_tool_active && ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
                 node_layout.position.x += ImGui::GetIO().MouseDelta.x / ui_state.zoom;
                 node_layout.position.y += ImGui::GetIO().MouseDelta.y / ui_state.zoom;
             }
@@ -115,7 +177,7 @@ void PedalBoard::render_signal_chain() {
             ImGui::SetCursorScreenPos(node_screen_pos);
             ImGui::InvisibleButton("util_drag_handle", ImVec2(node_width - 25.0f * ui_state.zoom, node_height));
             ImGui::SetItemAllowOverlap();
-            if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+            if (!ui_state.hand_tool_active && ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
                 node_layout.position.x += ImGui::GetIO().MouseDelta.x / ui_state.zoom;
                 node_layout.position.y += ImGui::GetIO().MouseDelta.y / ui_state.zoom;
             }

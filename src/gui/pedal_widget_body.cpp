@@ -203,7 +203,7 @@ void PedalWidget::render_tuner_display(ImDrawList* dl, ImVec2 p0, float pedal_wi
 }
 
 void PedalWidget::render_ir_cabinet_display(ImVec2 p0, float pedal_width, float zoom) {
-    auto* ir_cab = dynamic_cast<IRCabinet*>(effect_.get());
+    auto* ir_cab = dynamic_cast<CabinetSim*>(effect_.get());
     if (ir_cab) {
         float cx = p0.x + pedal_width * 0.5f;
         float display_y = p0.y + 50 * zoom;
@@ -222,32 +222,31 @@ void PedalWidget::render_ir_cabinet_display(ImVec2 p0, float pedal_width, float 
                 ir_cab->load_ir(path);
             }
         }
-    }
-    ImGui::PopStyleColor(3);
+        ImGui::PopStyleColor(3);
 
         display_y += 28 * zoom;
 
-    if (cab->has_ir()) {
-        const std::string& ir_name = cab->ir_name();
-        std::string display_name = ir_name;
-        if (display_name.size() > 20) {
-            display_name = display_name.substr(0, 17) + "...";
-        }
-        ImVec2 name_size = ImGui::CalcTextSize(display_name.c_str());
-        ImGui::SetCursorScreenPos(ImVec2(cx - name_size.x * 0.5f, display_y));
-        ImGui::PushStyleColor(ImGuiCol_Text, Theme::TextPrimary());
-        ImGui::TextUnformatted(display_name.c_str());
-        ImGui::PopStyleColor();
+        if (ir_cab->has_ir()) {
+            const std::string& ir_name = ir_cab->ir_name();
+            std::string display_name = ir_name;
+            if (display_name.size() > 20) {
+                display_name = display_name.substr(0, 17) + "...";
+            }
+            ImVec2 name_size = ImGui::CalcTextSize(display_name.c_str());
+            ImGui::SetCursorScreenPos(ImVec2(cx - name_size.x * 0.5f, display_y));
+            ImGui::PushStyleColor(ImGuiCol_Text, Theme::TextPrimary());
+            ImGui::TextUnformatted(display_name.c_str());
+            ImGui::PopStyleColor();
 
             display_y += 18 * zoom;
 
-        char dur_buf[32];
-        snprintf(dur_buf, sizeof(dur_buf), "%.1f ms", cab->ir_duration_ms());
-        ImVec2 dur_size = ImGui::CalcTextSize(dur_buf);
-        ImGui::SetCursorScreenPos(ImVec2(cx - dur_size.x * 0.5f, display_y));
-        ImGui::PushStyleColor(ImGuiCol_Text, Theme::TextSecondary());
-        ImGui::TextUnformatted(dur_buf);
-        ImGui::PopStyleColor();
+            char dur_buf[32];
+            snprintf(dur_buf, sizeof(dur_buf), "%.1f ms", ir_cab->ir_duration_ms());
+            ImVec2 dur_size = ImGui::CalcTextSize(dur_buf);
+            ImGui::SetCursorScreenPos(ImVec2(cx - dur_size.x * 0.5f, display_y));
+            ImGui::PushStyleColor(ImGuiCol_Text, Theme::TextSecondary());
+            ImGui::TextUnformatted(dur_buf);
+            ImGui::PopStyleColor();
 
             display_y += 22 * zoom;
 
@@ -269,14 +268,6 @@ void PedalWidget::render_ir_cabinet_display(ImVec2 p0, float pedal_width, float 
             ImGui::TextUnformatted(no_ir);
             ImGui::PopStyleColor();
         }
-        ImGui::PopStyleColor(3);
-    } else {
-        const char* no_ir = "No IR loaded";
-        ImVec2 ni_size = ImGui::CalcTextSize(no_ir);
-        ImGui::SetCursorScreenPos(ImVec2(cx - ni_size.x * 0.5f, display_y));
-        ImGui::PushStyleColor(ImGuiCol_Text, Theme::TextDim());
-        ImGui::TextUnformatted(no_ir);
-        ImGui::PopStyleColor();
     }
 }
 

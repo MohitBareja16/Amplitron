@@ -20,6 +20,9 @@ public:
     // Call this from the UI thread whenever connections change!
     void compile(const AudioGraph& graph);
 
+    // Broadcast tempo/BPM down to all active nodes in the execution plan
+    void update_transport_state(float bpm);
+
     // Hot-path processing (Strictly allocation-free and lock-free)
     // Adjust the pedal->process signature if your pedals process strictly in-place
     void process(const float* input, float* output, int num_samples);

@@ -9,6 +9,7 @@
 #include <string>
 #ifdef __APPLE__
 #include <TargetConditionals.h>
+#endif
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif

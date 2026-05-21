@@ -22,6 +22,7 @@ public:
     ImVec2 scrolling = ImVec2(0.0f, 0.0f);
     bool show_grid = true;
     bool is_fullscreen = false;
+    bool hand_tool_active = false;
     float zoom = 1.0f;
 
     // Node positioning registry mapped by Node ID

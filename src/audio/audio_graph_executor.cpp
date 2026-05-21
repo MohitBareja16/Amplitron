@@ -92,6 +92,14 @@ void AudioGraphExecutor::compile(const AudioGraph& graph) {
     }
 }
 
+void AudioGraphExecutor::update_transport_state(float bpm) {
+    for (auto& step : execution_plan_) {
+        if (step.pedal) {
+            step.pedal->set_transport_state(bpm);
+        }
+    }
+}
+
 void AudioGraphExecutor::process(const float* input, float* output, int num_samples) {
     if (num_samples > max_block_size_) {
         std::memcpy(output, input, static_cast<size_t>(max_block_size_) * sizeof(float));
