@@ -89,6 +89,7 @@ void AudioGraph::set_node_as_input(int node_id, bool is_input) {
     for (auto& node : nodes_) {
         if (node.id == node_id) {
             node.is_graph_input = is_input;
+            rebuild_topology();
             break;
         }
     }
@@ -98,6 +99,7 @@ void AudioGraph::set_node_as_output(int node_id, bool is_output) {
     for (auto& node : nodes_) {
         if (node.id == node_id) {
             node.is_graph_output = is_output;
+            rebuild_topology();
             break;
         }
     }

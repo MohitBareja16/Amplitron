@@ -129,7 +129,6 @@ public:
 
     void add_effect(std::shared_ptr<Effect> fx);
     void add_initial_effects(const std::vector<std::shared_ptr<Effect>>& fxs) {
-        std::lock_guard<std::mutex> lock(effect_mutex_);
         for (const auto& fx : fxs) {
             dummy_effects_.push_back(fx);
         }
