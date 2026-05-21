@@ -2,6 +2,7 @@
 #include "gui/pedal_widget.h"
 #include "gui/theme.h"
 #include "gui/gui_graph_state.h"
+#include "gui/command.h"
 #include <imgui.h>
 #include <unordered_map>
 #include <cmath>
@@ -78,60 +79,17 @@ void PedalBoard::render_signal_chain() {
 
     int node_to_delete = -1; // Safely track deletions outside the render loop
 
-    // Ensure all nodes have a default position using predecessor-based shifting algorithm
-    for (int node_id : audio_graph.get_sorted_nodes()) {
-        if (ui_state.node_positions.find(node_id) == ui_state.node_positions.end()) {
-            float insert_x = 40.0f;
-            float insert_y = 60.0f;
-            bool found_pred = false;
-            
-            const auto& sorted_ids = audio_graph.get_sorted_nodes();
-            auto it = std::find(sorted_ids.begin(), sorted_ids.end(), node_id);
-            if (it != sorted_ids.end()) {
-                auto pred_it = it;
-                while (pred_it != sorted_ids.begin()) {
-                    pred_it--;
-                    int pred_id = *pred_it;
-                    auto pos_it = ui_state.node_positions.find(pred_id);
-                    if (pos_it != ui_state.node_positions.end()) {
-                        insert_x = pos_it->second.position.x + 280.0f;
-                        insert_y = pos_it->second.position.y;
-                        found_pred = true;
-                        break;
-                    }
-                }
-            }
-            
-            if (!found_pred) {
-                float max_x = 40.0f;
-                for (const auto& pair : ui_state.node_positions) {
-                    if (pair.second.position.x > max_x) {
-                        max_x = pair.second.position.x;
-                    }
-                }
-                insert_x = ui_state.node_positions.empty() ? 40.0f : max_x + 280.0f;
-            }
-            
-            // Shift all downstream nodes to the right to make room for the new node
-            for (auto& pair : ui_state.node_positions) {
-                if (pair.second.position.x >= insert_x - 10.0f) {
-                    pair.second.position.x += 280.0f;
-                }
-            }
-            
-            ui_state.node_positions[node_id] = { ImVec2(insert_x, insert_y), false };
-        }
-    }
-
-    // Fallback for any disconnected/unreachable nodes not in the sorted graph
-    float fallback_spacing_x = 40.0f;
+    // Give all new nodes a default position at the end of the chain without shifting existing nodes
     for (const auto& node : audio_graph.get_nodes()) {
         if (ui_state.node_positions.find(node.id) == ui_state.node_positions.end()) {
-            float max_x = fallback_spacing_x;
+            float max_x = 40.0f;
             for (const auto& pair : ui_state.node_positions) {
-                if (pair.second.position.x > max_x) max_x = pair.second.position.x;
+                if (pair.second.position.x > max_x) {
+                    max_x = pair.second.position.x;
+                }
             }
-            ui_state.node_positions[node.id] = { ImVec2(max_x + 280.0f, 60.0f), false };
+            float insert_x = ui_state.node_positions.empty() ? 40.0f : max_x + 280.0f;
+            ui_state.node_positions[node.id] = { ImVec2(insert_x, 60.0f), false };
         }
     }
 
@@ -300,12 +258,24 @@ void PedalBoard::render_signal_chain() {
     }
 
     // Process Deletions safely after iterating
-     if (node_to_delete != -1) {
-        audio_graph.remove_node(node_to_delete);
+    if (node_to_delete != -1) {
+        auto* node_ptr = audio_graph.find_node(node_to_delete);
+        if (node_ptr && node_ptr->routing_type == NodeRoutingType::StandardEffect) {
+            auto& effects = engine_.effects();
+            for (size_t i = 0; i < effects.size(); ++i) {
+                if (effects[i] == node_ptr->pedal) {
+                    history_.execute(std::make_unique<RemoveEffectCommand>(engine_, static_cast<int>(i)));
+                    rebuild_widgets();
+                    break;
+                }
+            }
+        } else if (node_ptr) {
+            audio_graph.remove_node(node_to_delete);
+            engine_.commit_graph_changes();
+        }
         ui_state.node_positions.erase(node_to_delete);
         ui_state.active_src_pin_id = -1; // avoid stale pin state after topology change
-        engine_.commit_graph_changes();
- }
+    }
 
     // Draw Patch Cables
     int link_to_delete = -1;
