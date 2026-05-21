@@ -38,12 +38,12 @@ nlohmann::json AudioEngine::serialize() {
     j["input_gain"] = input_gain_.load(std::memory_order_relaxed);
     
     auto effects_array = nlohmann::json::array();
-    for (const auto& fx : effects_) {
+    for (const auto& fx : dummy_effects_) {
         if (fx) {
-            effects_array.push_back({
-                {"name", fx->name()}, // Corrected from get_name()
-                {"params", fx->get_params()}
-            });
+            nlohmann::json fx_json;
+            fx_json["name"] = fx->name();
+            fx_json["params"] = fx->get_params();
+            effects_array.push_back(fx_json);
         }
     }
     j["effects"] = effects_array;
@@ -60,7 +60,7 @@ void AudioEngine::deserialize(const nlohmann::json& j) {
     if (j.contains("effects")) {
         for (const auto& fx_data : j["effects"]) {
             std::string name = fx_data["name"];
-            for (auto& fx : effects_) {
+            for (auto& fx : dummy_effects_) {
                 if (fx && std::string(fx->name()) == name) {
                     fx->set_params(fx_data["params"]);
                 }
