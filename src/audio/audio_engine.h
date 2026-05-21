@@ -10,6 +10,7 @@
 #include "audio/audio_graph_executor.h"
 #include <memory>
 
+#include <nlohmann/json.hpp>
 // FORWARD DECLARATIONS
 namespace Amplitron {
 
@@ -44,6 +45,10 @@ public:
 
     void commit_graph_changes();
 
+    /** @brief serialize and deserialize method signatures to AudioEngine class definition */
+    
+    nlohmann::json serialize();
+    void deserialize(const nlohmann::json& j);
     /** @brief Initialize the audio back-end. @return true on success. */
     bool initialize();
 
