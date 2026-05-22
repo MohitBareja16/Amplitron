@@ -57,6 +57,76 @@ void to_ordered_json(OrderedJson& j, const PresetData::EffectData& fx) {
     }
 }
 
+void to_ordered_json(OrderedJson& j, const PresetData::NodeData& node) {
+    OrderedJson params_obj = OrderedJson::object();
+    for (const auto& [name, value] : node.params) {
+        params_obj[name] = value;
+    }
+
+    j = OrderedJson::object();
+    j["id"] = node.id;
+    j["type"] = node.type;
+    j["position"] = {{"x", node.x}, {"y", node.y}};
+    j["enabled"] = node.enabled;
+    j["mix"] = node.mix;
+    if (node.num_inputs > 0) {
+        j["num_inputs"] = node.num_inputs;
+    }
+    if (!node.params.empty()) {
+        j["params"] = std::move(params_obj);
+    }
+    if (!node.metadata.empty()) {
+        OrderedJson metadata_obj = OrderedJson::object();
+        for (const auto& [key, value] : node.metadata) {
+            metadata_obj[key] = value;
+        }
+        j["metadata"] = std::move(metadata_obj);
+    }
+}
+
+void from_ordered_json(const OrderedJson& j, PresetData::NodeData& node) {
+    node.id      = j.value("id",      std::string{});
+    node.type    = j.value("type",    std::string{});
+    node.enabled = j.value("enabled", true);
+    node.mix     = j.value("mix",     1.0f);
+    node.num_inputs = j.value("num_inputs", 0);
+
+    if (j.contains("position") && j["position"].is_object()) {
+        node.x = j["position"].value("x", 0.0f);
+        node.y = j["position"].value("y", 0.0f);
+    }
+
+    node.params.clear();
+    node.metadata.clear();
+
+    if (j.contains("params") && j["params"].is_object()) {
+        for (auto it = j["params"].begin(); it != j["params"].end(); ++it) {
+            if (it.value().is_number()) {
+                node.params.emplace_back(it.key(), it.value().get<float>());
+            }
+        }
+    }
+
+    if (j.contains("metadata") && j["metadata"].is_object()) {
+        for (auto it = j["metadata"].begin(); it != j["metadata"].end(); ++it) {
+            if (it.value().is_string()) {
+                node.metadata[it.key()] = it.value().get<std::string>();
+            }
+        }
+    }
+}
+
+void to_ordered_json(OrderedJson& j, const PresetData::LinkData& link) {
+    j = OrderedJson::object();
+    j["src_pin"] = link.src_pin;
+    j["dst_pin"] = link.dst_pin;
+}
+
+void from_ordered_json(const OrderedJson& j, PresetData::LinkData& link) {
+    link.src_pin = j.value("src_pin", std::string{});
+    link.dst_pin = j.value("dst_pin", std::string{});
+}
+
 void from_ordered_json(const OrderedJson& j, PresetData::EffectData& fx) {
     fx.type    = j.value("type",    std::string{});
     fx.enabled = j.value("enabled", false);
@@ -127,24 +197,49 @@ void to_ordered_json(OrderedJson& j, const PresetData& preset) {
         midi_arr.push_back(std::move(jm));
     }
 
+    OrderedJson nodes_arr = OrderedJson::array();
+    for (const auto& node : preset.nodes) {
+        OrderedJson jn;
+        to_ordered_json(jn, node);
+        nodes_arr.push_back(std::move(jn));
+    }
+
+    OrderedJson links_arr = OrderedJson::array();
+    for (const auto& link : preset.links) {
+        OrderedJson jl;
+        to_ordered_json(jl, link);
+        links_arr.push_back(std::move(jl));
+    }
+
     j = OrderedJson::object();
-    j["format_version"] = 1;
+    j["format_version"] = 2; // Increased format version for graph presets
+    j["routing"] = preset.routing;
     j["name"] = preset.name;
     j["description"] = preset.description;
     j["saved_at"] = timebuf;
     j["input_gain"] = preset.input_gain;
     j["output_gain"] = preset.output_gain;
-    j["effects"] = std::move(effects_arr);
+    
+    if (preset.routing == "linear") {
+        j["effects"] = std::move(effects_arr);
+    } else {
+        j["nodes"] = std::move(nodes_arr);
+        j["links"] = std::move(links_arr);
+    }
+    
     j["midi_mappings"] = std::move(midi_arr);
 }
 
 void from_ordered_json(const OrderedJson& j, PresetData& preset) {
     preset.name         = j.value("name",         std::string{});
     preset.description  = j.value("description",  std::string{});
+    preset.routing      = j.value("routing",      std::string{"linear"});
     preset.input_gain   = j.value("input_gain",   0.7f);
     preset.output_gain  = j.value("output_gain",  0.8f);
 
     preset.effects.clear();
+    preset.nodes.clear();
+    preset.links.clear();
     preset.midi_mappings.clear();
 
     if (j.contains("effects") && j["effects"].is_array()) {
@@ -153,6 +248,26 @@ void from_ordered_json(const OrderedJson& j, PresetData& preset) {
             from_ordered_json(jfx, fx);
             if (!fx.type.empty()) {
                 preset.effects.push_back(std::move(fx));
+            }
+        }
+    }
+
+    if (j.contains("nodes") && j["nodes"].is_array()) {
+        for (const auto& jn : j["nodes"]) {
+            PresetData::NodeData node;
+            from_ordered_json(jn, node);
+            if (!node.id.empty() && !node.type.empty()) {
+                preset.nodes.push_back(std::move(node));
+            }
+        }
+    }
+
+    if (j.contains("links") && j["links"].is_array()) {
+        for (const auto& jl : j["links"]) {
+            PresetData::LinkData link;
+            from_ordered_json(jl, link);
+            if (!link.src_pin.empty() && !link.dst_pin.empty()) {
+                preset.links.push_back(std::move(link));
             }
         }
     }
@@ -274,27 +389,64 @@ void to_json(nlohmann::json& j, const PresetData& preset) {
         midi_arr.push_back(std::move(jm));
     }
 
+    // Build nodes and links arrays
+    nlohmann::json nodes_arr = nlohmann::json::array();
+    for (const auto& node : preset.nodes) {
+        nlohmann::json jn = {
+            {"id", node.id},
+            {"type", node.type},
+            {"position", {{"x", node.x}, {"y", node.y}}},
+            {"enabled", node.enabled}
+        };
+        if (node.num_inputs > 0) jn["num_inputs"] = node.num_inputs;
+        nlohmann::json params_obj = nlohmann::json::object();
+        for (const auto& [name, value] : node.params) {
+            params_obj[name] = value;
+        }
+        if (!node.params.empty()) jn["params"] = params_obj;
+        if (!node.metadata.empty()) jn["metadata"] = node.metadata;
+        nodes_arr.push_back(std::move(jn));
+    }
+
+    nlohmann::json links_arr = nlohmann::json::array();
+    for (const auto& link : preset.links) {
+        links_arr.push_back({
+            {"src_pin", link.src_pin},
+            {"dst_pin", link.dst_pin}
+        });
+    }
+
     j = {
-        {"format_version", 1},
+        {"format_version", 2},
+        {"routing",        preset.routing},
         {"name",           preset.name},
         {"description",    preset.description},
         {"saved_at",       timebuf},
         {"input_gain",     preset.input_gain},
         {"output_gain",    preset.output_gain},
-        {"effects",        std::move(effects_arr)},
         {"midi_mappings",  std::move(midi_arr)},
     };
+    
+    if (preset.routing == "linear") {
+        j["effects"] = std::move(effects_arr);
+    } else {
+        j["nodes"] = std::move(nodes_arr);
+        j["links"] = std::move(links_arr);
+    }
 }
 
 void from_json(const nlohmann::json& j, PresetData& preset) {
     preset.name         = j.value("name",         std::string{});
     preset.description  = j.value("description",  std::string{});
+    preset.routing      = j.value("routing",      std::string{"linear"});
     preset.input_gain   = j.value("input_gain",   0.7f);
     preset.output_gain  = j.value("output_gain",  0.8f);
 
     // Clear before repopulating so parsing into a non-empty PresetData never
     // duplicates/retains old entries.
     preset.effects.clear();
+    preset.nodes.clear();
+    preset.links.clear();
     preset.midi_mappings.clear();
 
     if (j.contains("effects") && j["effects"].is_array()) {
@@ -303,6 +455,44 @@ void from_json(const nlohmann::json& j, PresetData& preset) {
             from_json(jfx, fx);
             if (!fx.type.empty()) {
                 preset.effects.push_back(std::move(fx));
+            }
+        }
+    }
+
+    if (j.contains("nodes") && j["nodes"].is_array()) {
+        for (const auto& jn : j["nodes"]) {
+            PresetData::NodeData node;
+            node.id = jn.value("id", std::string{});
+            node.type = jn.value("type", std::string{});
+            node.enabled = jn.value("enabled", true);
+            node.num_inputs = jn.value("num_inputs", 0);
+            if (jn.contains("position") && jn["position"].is_object()) {
+                node.x = jn["position"].value("x", 0.0f);
+                node.y = jn["position"].value("y", 0.0f);
+            }
+            if (jn.contains("params") && jn["params"].is_object()) {
+                for (const auto& [key, val] : jn["params"].items()) {
+                    if (val.is_number()) node.params.push_back({key, val.get<float>()});
+                }
+            }
+            if (jn.contains("metadata") && jn["metadata"].is_object()) {
+                for (const auto& [key, val] : jn["metadata"].items()) {
+                    if (val.is_string()) node.metadata[key] = val.get<std::string>();
+                }
+            }
+            if (!node.id.empty() && !node.type.empty()) {
+                preset.nodes.push_back(std::move(node));
+            }
+        }
+    }
+
+    if (j.contains("links") && j["links"].is_array()) {
+        for (const auto& jl : j["links"]) {
+            PresetData::LinkData link;
+            link.src_pin = jl.value("src_pin", std::string{});
+            link.dst_pin = jl.value("dst_pin", std::string{});
+            if (!link.src_pin.empty() && !link.dst_pin.empty()) {
+                preset.links.push_back(std::move(link));
             }
         }
     }

@@ -56,8 +56,7 @@ bool mock_load_graph(const std::string &json_str, AudioGraph &graph) {
     return false;
 
   // Handle Legacy Linear Preset Format
-  if (j.contains("format_version") && j["format_version"] == 1 &&
-      !j.contains("nodes")) {
+  if (!j.contains("nodes")) {
     PresetData legacy;
     if (!from_json_ext(json_str, legacy))
       return false;
