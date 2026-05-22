@@ -141,7 +141,9 @@ bool mock_load_graph(const std::string &json_str, AudioGraph &graph) {
         pin_map.find(old_dst) == pin_map.end()) {
       return false; // Load fails gracefully
     }
-    graph.add_link(pin_map[old_src], pin_map[old_dst]);
+    if (graph.add_link(pin_map[old_src], pin_map[old_dst]) == -1) {
+      return false; // Load fails gracefully if link is invalid/creates cycle
+    }
   }
 
   return graph.rebuild_topology();
@@ -173,7 +175,7 @@ TEST(audio_graph_sequential_sorting) {
 TEST(audio_graph_parallel_split_merge) {
   AudioGraph graph;
 
-  int p1 = graph.add_node("Splitter", NodeRoutingType::StandardEffect);
+  int p1 = graph.add_node("Splitter", NodeRoutingType::Splitter);
   int p2 = graph.add_node("Parallel Low Path", NodeRoutingType::StandardEffect);
   int p3 =
       graph.add_node("Parallel High Path", NodeRoutingType::StandardEffect);
@@ -181,9 +183,12 @@ TEST(audio_graph_parallel_split_merge) {
 
   auto nodes = graph.get_nodes();
 
-  // Link splits: Pedal 1 splits directly into both 2 and 3
-  graph.add_link(nodes[0].output_pin_ids[0], nodes[1].input_pin_ids[0]);
-  graph.add_link(nodes[0].output_pin_ids[0], nodes[2].input_pin_ids[0]);
+  // Link splits: Pedal 1 splits directly into both 2 and 3 using separate output pins
+  int l1 = graph.add_link(nodes[0].output_pin_ids[0], nodes[1].input_pin_ids[0]);
+  int l2 = graph.add_link(nodes[0].output_pin_ids[1], nodes[2].input_pin_ids[0]);
+  
+  ASSERT_TRUE(l1 != -1);
+  ASSERT_TRUE(l2 != -1);
 
   nodes = graph.get_nodes();
 

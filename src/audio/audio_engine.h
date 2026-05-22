@@ -129,15 +129,11 @@ public:
 
     void add_effect(std::shared_ptr<Effect> fx);
     void add_initial_effects(const std::vector<std::shared_ptr<Effect>>& fxs) {
-        {
-            std::lock_guard<std::mutex> lock(effect_mutex_);
-            main_graph_ = AudioGraph();
-        }
         dummy_effects_.clear();
         for (const auto& fx : fxs) {
             dummy_effects_.push_back(fx);
         }
-        sync_graph_with_dummy_effects();
+        sync_graph_with_dummy_effects(true);
     }
     void insert_effect(int index, std::shared_ptr<Effect> fx);
     void remove_effect(int index);
@@ -359,7 +355,7 @@ private:
     // The shadow executor (Safely copied by the Audio thread)
     std::shared_ptr<AudioGraphExecutor> audio_shadow_executor_;
 
-    void sync_graph_with_dummy_effects();
+    void sync_graph_with_dummy_effects(bool reset_graph = false);
 
     // Lock-free GUI -> Audio command queue (256 slots)
     SPSCQueue<AudioCommand, 256> command_queue_;

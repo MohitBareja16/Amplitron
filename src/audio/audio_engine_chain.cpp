@@ -3,9 +3,12 @@
 
 namespace Amplitron {
 
-void AudioEngine::sync_graph_with_dummy_effects() {
+void AudioEngine::sync_graph_with_dummy_effects(bool reset_graph) {
     {
         std::lock_guard<std::mutex> lock(effect_mutex_);
+        if (reset_graph) {
+            main_graph_ = AudioGraph();
+        }
         
         if (main_graph_.get_nodes().empty()) {
             // 1. INITIAL SETUP: Reset the main graph model completely and auto-wire
@@ -112,11 +115,7 @@ void AudioEngine::remove_effect(int index) {
 
 void AudioEngine::clear_effects() {
     dummy_effects_.clear();
-    {
-        std::lock_guard<std::mutex> lock(effect_mutex_);
-        main_graph_ = AudioGraph();
-    }
-    sync_graph_with_dummy_effects();
+    sync_graph_with_dummy_effects(true);
 }
 
 void AudioEngine::move_effect(int from, int to) {
