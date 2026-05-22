@@ -129,6 +129,11 @@ public:
 
     void add_effect(std::shared_ptr<Effect> fx);
     void add_initial_effects(const std::vector<std::shared_ptr<Effect>>& fxs) {
+        {
+            std::lock_guard<std::mutex> lock(effect_mutex_);
+            main_graph_ = AudioGraph();
+        }
+        dummy_effects_.clear();
         for (const auto& fx : fxs) {
             dummy_effects_.push_back(fx);
         }
@@ -136,6 +141,7 @@ public:
     }
     void insert_effect(int index, std::shared_ptr<Effect> fx);
     void remove_effect(int index);
+    void clear_effects();
     void move_effect(int from, int to);
     void restore_effects_state(std::vector<std::shared_ptr<Effect>> state);
 
