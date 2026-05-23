@@ -183,6 +183,10 @@ bool PresetManager::load_preset(const std::string &filepath,
     // Graph is empty because of clear_effects(). We can reconstruct it.
     std::vector<std::shared_ptr<Effect>> loaded_effects;
     for (auto &fd : preset.effects) {
+      if (fd.type == "IR Cabinet") {
+        fd.type = "Cabinet";
+      }
+
       auto fx = EffectFactory::instance().create(fd.type);
       if (!fx) {
         std::cerr << "Unknown effect type: " << fd.type << std::endl;
@@ -198,23 +202,6 @@ bool PresetManager::load_preset(const std::string &filepath,
           if (ep.name == saved_param.first) {
             ep.value = clamp(saved_param.second, ep.min_val, ep.max_val);
             break;
-          }
-        }
-      }
-
-      if (fd.type == "IR Cabinet") {
-        fd.type = "Cabinet";
-        fx = EffectFactory::instance().create(fd.type);
-        if (fx) {
-          fx->set_enabled(fd.enabled);
-          fx->set_mix(fd.mix);
-          for (auto &saved_param : fd.params) {
-            for (auto &ep : fx->params()) {
-              if (ep.name == saved_param.first) {
-                ep.value = clamp(saved_param.second, ep.min_val, ep.max_val);
-                break;
-              }
-            }
           }
         }
       }
@@ -416,6 +403,13 @@ bool PresetManager::graph_from_json(const std::string &json,
             }
           }
         }
+
+        auto it = node.metadata.find("ir_path");
+        if (it != node.metadata.end() && !it->second.empty()) {
+          auto *cab = dynamic_cast<CabinetSim *>(pedal.get());
+          if (cab)
+            cab->load_ir(it->second);
+        }
       }
     }
 
@@ -444,7 +438,7 @@ bool PresetManager::graph_from_json(const std::string &json,
     else if (t == "mixer")
       node_name = "Mixer";
 
-    int new_id = graph.add_node(node_name, routing_type, pedal);
+    int new_id = graph.add_node(node_name, routing_type, pedal, node.num_inputs);
     graph.set_node_position(new_id, node.x, node.y);
 
     if (node_name == "Input")

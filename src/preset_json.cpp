@@ -23,6 +23,7 @@
 #include "midi/midi_manager.h"
 
 #include <ctime>
+#include <stdexcept>
 #include <iostream>
 #include <sstream>
 
@@ -237,6 +238,15 @@ void from_ordered_json(const OrderedJson &j, PresetData &preset) {
   preset.input_gain = j.value("input_gain", 0.7f);
   preset.output_gain = j.value("output_gain", 0.8f);
 
+  if (preset.routing == "graph") {
+    if (!j.contains("nodes") || !j["nodes"].is_array()) {
+      throw std::invalid_argument("Malformed graph preset: missing or invalid 'nodes' array");
+    }
+    if (!j.contains("links") || !j["links"].is_array()) {
+      throw std::invalid_argument("Malformed graph preset: missing or invalid 'links' array");
+    }
+  }
+
   preset.effects.clear();
   preset.nodes.clear();
   preset.links.clear();
@@ -441,6 +451,15 @@ void from_json(const nlohmann::json &j, PresetData &preset) {
   preset.input_gain = j.value("input_gain", 0.7f);
   preset.output_gain = j.value("output_gain", 0.8f);
 
+  if (preset.routing == "graph") {
+    if (!j.contains("nodes") || !j["nodes"].is_array()) {
+      throw std::invalid_argument("Malformed graph preset: missing or invalid 'nodes' array");
+    }
+    if (!j.contains("links") || !j["links"].is_array()) {
+      throw std::invalid_argument("Malformed graph preset: missing or invalid 'links' array");
+    }
+  }
+
   // Clear before repopulating so parsing into a non-empty PresetData never
   // duplicates/retains old entries.
   preset.effects.clear();
@@ -529,6 +548,9 @@ bool from_json_ext(const std::string &json_str, PresetData &preset) {
     return true;
   } catch (const nlohmann::json::exception &e) {
     std::cerr << "[preset_json] JSON parse error: " << e.what() << std::endl;
+    return false;
+  } catch (const std::exception &e) {
+    std::cerr << "[preset_json] Error: " << e.what() << std::endl;
     return false;
   }
 }

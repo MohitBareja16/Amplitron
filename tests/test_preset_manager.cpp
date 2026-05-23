@@ -4,6 +4,7 @@
 #include "audio/effects/noise_gate.h"
 #include "audio/effects/overdrive.h"
 #include "audio/effects/reverb.h"
+#include "audio/effects/cabinet_sim.h"
 #include "gui/gui_graph_state.h"
 #include "preset_manager.h"
 #include "test_framework.h"
@@ -430,4 +431,155 @@ TEST(preset_parallel_amp_rig_integration) {
   std::remove(path.c_str());
   engine.shutdown();
   engine2.shutdown();
+}
+
+TEST(preset_graph_missing_nodes_throws) {
+  std::string json = R"({
+    "format_version": 2,
+    "routing": "graph",
+    "name": "Bad Graph Preset",
+    "links": []
+  })";
+  AudioGraph graph;
+  bool loaded = PresetManager::graph_from_json(json, graph);
+  ASSERT_FALSE(loaded);
+}
+
+TEST(preset_graph_missing_links_throws) {
+  std::string json = R"({
+    "format_version": 2,
+    "routing": "graph",
+    "name": "Bad Graph Preset 2",
+    "nodes": []
+  })";
+  AudioGraph graph;
+  bool loaded = PresetManager::graph_from_json(json, graph);
+  ASSERT_FALSE(loaded);
+}
+
+static void write_dummy_wav(const std::string& path) {
+    std::ofstream out(path, std::ios::binary);
+    if (!out.is_open()) return;
+    const unsigned char header[44] = {
+        'R','I','F','F', 40,0,0,0, 'W','A','V','E',
+        'f','m','t',' ', 16,0,0,0, 1,0, 1,0,
+        68,172,0,0, 136,88,1,0, 2,0, 16,0,
+        'd','a','t','a', 4,0,0,0
+    };
+    out.write(reinterpret_cast<const char*>(header), 44);
+    const unsigned char data[4] = {0, 0, 0, 0};
+    out.write(reinterpret_cast<const char*>(data), 4);
+}
+
+TEST(preset_legacy_ir_cabinet_migration) {
+  write_dummy_wav("test.wav");
+  std::string json = R"({
+    "format_version": 1,
+    "routing": "linear",
+    "name": "Legacy Preset",
+    "effects": [
+      {
+        "type": "IR Cabinet",
+        "enabled": true,
+        "mix": 1.0,
+        "params": [["Volume", 0.8]],
+        "metadata": {"ir_path": "test.wav"}
+      }
+    ]
+  })";
+  
+  std::string path = "presets/test_legacy_ir_cab.json";
+  std::ofstream out(path);
+  out << json;
+  out.close();
+
+  AudioEngine engine;
+  engine.initialize();
+  bool loaded = PresetManager::load_preset(path, engine);
+  ASSERT_TRUE(loaded);
+  
+  bool found_cab = false;
+  for (const auto &n : engine.graph().get_nodes()) {
+    if (n.pedal && n.pedal->name() == std::string("Cabinet")) {
+      found_cab = true;
+      auto* cab = dynamic_cast<CabinetSim*>(n.pedal.get());
+      if (cab) {
+        ASSERT_EQ(cab->ir_path(), "test.wav");
+      }
+    }
+  }
+  ASSERT_TRUE(found_cab);
+  
+  std::remove("test.wav");
+  std::remove(path.c_str());
+  engine.shutdown();
+}
+
+TEST(preset_graph_cabinet_ir_loading) {
+  write_dummy_wav("my_ir.wav");
+  std::string json = R"({
+    "format_version": 2,
+    "routing": "graph",
+    "name": "Graph Cab Preset",
+    "nodes": [
+      {
+        "id": "n100",
+        "type": "cabinet",
+        "enabled": true,
+        "mix": 1.0,
+        "params": [],
+        "metadata": {"ir_path": "my_ir.wav"}
+      }
+    ],
+    "links": []
+  })";
+  
+  AudioGraph graph;
+  bool loaded = PresetManager::graph_from_json(json, graph);
+  ASSERT_TRUE(loaded);
+  
+  bool found_cab = false;
+  for (const auto &n : graph.get_nodes()) {
+    if (n.pedal && n.pedal->name() == std::string("Cabinet")) {
+      found_cab = true;
+      auto* cab = dynamic_cast<CabinetSim*>(n.pedal.get());
+      if (cab) {
+        ASSERT_EQ(cab->ir_path(), "my_ir.wav");
+      }
+    }
+  }
+  ASSERT_TRUE(found_cab);
+  std::remove("my_ir.wav");
+}
+
+TEST(preset_graph_widened_mixer) {
+  std::string json = R"({
+    "format_version": 2,
+    "routing": "graph",
+    "name": "Wide Mixer Preset",
+    "nodes": [
+      {
+        "id": "n200",
+        "type": "mixer",
+        "num_inputs": 4,
+        "enabled": true,
+        "mix": 1.0,
+        "params": []
+      }
+    ],
+    "links": []
+  })";
+  
+  AudioGraph graph;
+  bool loaded = PresetManager::graph_from_json(json, graph);
+  ASSERT_TRUE(loaded);
+  
+  bool found_mixer = false;
+  for (const auto &n : graph.get_nodes()) {
+    if (n.routing_type == NodeRoutingType::Mixer) {
+      found_mixer = true;
+      ASSERT_EQ(n.input_pin_ids.size(), 4);
+    }
+  }
+  ASSERT_TRUE(found_mixer);
 }
