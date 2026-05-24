@@ -55,6 +55,7 @@ void PedalBoard::render_signal_chain() {
         btn_flags |= ImGuiButtonFlags_MouseButtonLeft;
     }
     
+    ImGui::SetNextItemAllowOverlap();
     ImGui::InvisibleButton("canvas_panning_hotspot", canvas_size, btn_flags);
     ImGui::SetItemAllowOverlap();
     // Update canvas_hovered here — after InvisibleButton — so it reflects the actual canvas item
@@ -98,6 +99,7 @@ void PedalBoard::render_signal_chain() {
 
     // Draw fullscreen button at top right
     ImGui::SetCursorScreenPos(ImVec2(canvas_pos.x + canvas_size.x - 70, canvas_pos.y + 10));
+    ImGui::SetNextItemAllowOverlap();
     if (ImGui::Button(ui_state.is_fullscreen ? "Exit FS" : "Full Screen")) {
         ui_state.is_fullscreen = !ui_state.is_fullscreen;
         if (!ui_state.is_fullscreen) {
@@ -105,7 +107,6 @@ void PedalBoard::render_signal_chain() {
             ui_state.target_zoom = 1.0f;
         }
     }
-    ImGui::SetItemAllowOverlap();
 
     if (ui_state.show_grid) {
         float GRID_SZ = 32.0f * ui_state.zoom;
@@ -201,8 +202,8 @@ void PedalBoard::render_signal_chain() {
             ImGui::EndGroup();
 
             ImGui::SetCursorScreenPos(node_screen_pos);
+            ImGui::SetNextItemAllowOverlap(); 
             ImGui::InvisibleButton("native_drag_handle", ImVec2(node_width - 25.0f * ui_state.zoom, 30.0f * ui_state.zoom));
-            ImGui::SetItemAllowOverlap(); 
             if (!ui_state.hand_tool_active && ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
                 node_layout.position.x += ImGui::GetIO().MouseDelta.x / ui_state.zoom;
                 node_layout.position.y += ImGui::GetIO().MouseDelta.y / ui_state.zoom;
@@ -214,8 +215,8 @@ void PedalBoard::render_signal_chain() {
             draw_list->AddRect(node_screen_pos, node_end, IM_COL32(180, 140, 80, 180), Theme::ROUNDING_MD * ui_state.zoom, 0, 1.5f * ui_state.zoom);
 
             ImGui::SetCursorScreenPos(node_screen_pos);
+            ImGui::SetNextItemAllowOverlap();
             ImGui::InvisibleButton("util_drag_handle", ImVec2(node_width - 25.0f * ui_state.zoom, node_height));
-            ImGui::SetItemAllowOverlap();
             if (!ui_state.hand_tool_active && ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
                 node_layout.position.x += ImGui::GetIO().MouseDelta.x / ui_state.zoom;
                 node_layout.position.y += ImGui::GetIO().MouseDelta.y / ui_state.zoom;
@@ -356,6 +357,7 @@ void PedalBoard::render_signal_chain() {
             
             // Use SmallButton and exact string formatting
             std::string remove_label = "X##rm" + std::to_string(node.id);
+            ImGui::SetNextItemAllowOverlap();
             if (ImGui::SmallButton(remove_label.c_str())) {
                 node_to_delete = node.id;
             }
@@ -364,7 +366,6 @@ void PedalBoard::render_signal_chain() {
             }
             
             ImGui::PopStyleColor(2);
-            ImGui::SetItemAllowOverlap();
         }
 
         // ====================================================================
@@ -382,17 +383,21 @@ void PedalBoard::render_signal_chain() {
 
                 ImGui::SetCursorScreenPos(ImVec2(pin_pos.x - 10.0f * ui_state.zoom, pin_pos.y - 10.0f * ui_state.zoom));
                 ImGui::PushID(pin_id);
+                ImGui::SetNextItemAllowOverlap();
                 ImGui::InvisibleButton("in_pin", ImVec2(20.0f * ui_state.zoom, 20.0f * ui_state.zoom));
                 
                 // Check if hovered while releasing a dragged wire
-                if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+                ImVec2 mouse_pos = ImGui::GetMousePos();
+                float dist_sq = pow(mouse_pos.x - pin_pos.x, 2) + pow(mouse_pos.y - pin_pos.y, 2);
+                if (dist_sq < pow(15.0f * ui_state.zoom, 2) && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+                    printf("MANUAL DROP HOVER DETECTED! src: %d, dest: %d\n", ui_state.active_src_pin_id, pin_id);
                     if (ui_state.active_src_pin_id != -1) {
-                        audio_graph.add_link(ui_state.active_src_pin_id, pin_id);
+                        int res = audio_graph.add_link(ui_state.active_src_pin_id, pin_id);
+                        printf("add_link returned: %d\n", res);
                         engine_.commit_graph_changes();
                         ui_state.active_src_pin_id = -1;
                     }
                 }
-                ImGui::SetItemAllowOverlap();
                 ImGui::PopID();
             }
         }
@@ -415,6 +420,7 @@ void PedalBoard::render_signal_chain() {
 
                 ImGui::SetCursorScreenPos(ImVec2(pin_pos.x - 10.0f * ui_state.zoom, pin_pos.y - 10.0f * ui_state.zoom));
                 ImGui::PushID(pin_id);
+                ImGui::SetNextItemAllowOverlap();
                 ImGui::InvisibleButton("out_pin", ImVec2(20.0f * ui_state.zoom, 20.0f * ui_state.zoom));
                 
                 // Start drafting wire instantly on Mouse DOWN or delete on right click
@@ -434,7 +440,6 @@ void PedalBoard::render_signal_chain() {
                         if (deleted_any) engine_.commit_graph_changes();
                     }
                 }
-                ImGui::SetItemAllowOverlap();
                 ImGui::PopID();
             }
         }
@@ -529,6 +534,10 @@ void PedalBoard::render_signal_chain() {
             ui_state.active_src_pin_id = -1; // Snap cable back if dropped in empty space
         }
     }
+
+    // Fix ImGui cursor bounds warnings after free panning
+    ImGui::SetCursorPos(ImVec2(0, 0));
+    ImGui::Dummy(canvas_size);
 
     draw_list->PopClipRect();
 }
