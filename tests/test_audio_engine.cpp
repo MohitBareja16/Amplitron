@@ -4,6 +4,9 @@
 #include "audio/effects/overdrive.h"
 #include <vector>
 #include <memory>
+#include <filesystem>
+#include <chrono>
+#include <cmath>
 
 using namespace Amplitron;
 
@@ -138,9 +141,24 @@ TEST(AudioEngineChain_MoveEffect) {
     ASSERT_EQ(engine.effects()[1], dist);
     
     // Invalid moves and self-moves to hit branch coverage
+    auto snap_count = engine.effects().size();
+    auto snap_0 = engine.effects()[0];
+    auto snap_1 = engine.effects()[1];
+
     engine.move_effect(-1, 0);
+    ASSERT_EQ(engine.effects().size(), snap_count);
+    ASSERT_EQ(engine.effects()[0], snap_0);
+    ASSERT_EQ(engine.effects()[1], snap_1);
+
     engine.move_effect(0, 5);
+    ASSERT_EQ(engine.effects().size(), snap_count);
+    ASSERT_EQ(engine.effects()[0], snap_0);
+    ASSERT_EQ(engine.effects()[1], snap_1);
+
     engine.move_effect(0, 0); // Self-move
+    ASSERT_EQ(engine.effects().size(), snap_count);
+    ASSERT_EQ(engine.effects()[0], snap_0);
+    ASSERT_EQ(engine.effects()[1], snap_1);
 }
 
 TEST(AudioEngineApi_MetronomeState) {
@@ -163,11 +181,26 @@ TEST(AudioEngineApi_MetronomeState) {
     engine.initialize();
     engine.set_buffer_size(64);
     std::vector<float> in(64, 0.0f), out(128, 0.0f);
-    engine.process_audio(in.data(), out.data(), 64);
-    // Process enough to generate a click
-    for(int i=0; i<100; ++i) {
+    
+    // Compute deterministic number of process_audio calls
+    double sampleRate = 48000.0;
+    double bpm = 40.0; // The bounded BPM from above
+    int samplesPerClick = static_cast<int>(sampleRate * 60.0 / bpm);
+    int bufferSize = 64;
+    int processCalls = (samplesPerClick / bufferSize) + 1;
+
+    bool clickDetected = false;
+    for(int i = 0; i < processCalls; ++i) {
+        std::fill(out.begin(), out.end(), 0.0f);
         engine.process_audio(in.data(), out.data(), 64);
+        for (float s : out) {
+            if (std::abs(s) > 1e-6f) {
+                clickDetected = true;
+                break;
+            }
+        }
     }
+    ASSERT_TRUE(clickDetected);
 }
 
 TEST(AudioEngineApi_SuggestedBufferSize) {
@@ -204,17 +237,31 @@ TEST(AudioEngineApi_CopyAnalyzerSnapshot) {
     ASSERT_EQ(new_engine.copy_analyzer_snapshot(snap_in.data(), snap_out.data(), 1024), false); // seq == 0
 }
 
+class TestTunerEffect : public Effect {
+public:
+    bool processed = false;
+    TestTunerEffect() : Effect() {}
+    void process(float* /*buffer*/, int /*num_samples*/) override {
+        processed = true;
+    }
+    void reset() override {}
+    const char* name() const override { return "TestTuner"; }
+    std::vector<EffectParam>& params() override { static std::vector<EffectParam> p; return p; }
+};
+
 TEST(AudioEngineChain_TunerTap) {
     AudioEngine engine;
     ASSERT_EQ(engine.has_tuner_tap(), false);
     
-    auto tap = std::make_shared<Distortion>();
+    auto tap = std::make_shared<TestTunerEffect>();
     engine.set_tuner_tap(tap);
     ASSERT_EQ(engine.has_tuner_tap(), true);
     
     // Process audio to cover the tuner tap execution branch in audio_engine_process.cpp
     std::vector<float> in(64, 0.5f), out(128, 0.0f);
     engine.process_audio(in.data(), out.data(), 64);
+    
+    ASSERT_TRUE(tap->processed);
     
     engine.clear_tuner_tap();
     ASSERT_EQ(engine.has_tuner_tap(), false);
@@ -263,15 +310,60 @@ TEST(AudioEngineProcess_RecorderBranch) {
     engine.initialize();
     engine.set_buffer_size(64);
     
+    auto now = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    std::string temp_file = (std::filesystem::temp_directory_path() / ("test_record_" + std::to_string(now) + ".wav")).string();
+    
     // Start recorder
-    engine.recorder().start("test_dummy_record.wav", 48000, 1);
+    engine.recorder().start(temp_file, 48000, 1);
     ASSERT_EQ(engine.recorder().is_recording(), true);
     
     std::vector<float> in(64, 0.5f), out(128, 0.0f);
     // Process audio to trigger the recorder_.write_samples() branch
     engine.process_audio(in.data(), out.data(), 64);
     
-    // Check if samples were passed into the recorder (which may reside in a ring buffer briefly)
+    // Check if samples were passed into the recorder
     engine.recorder().stop();
     ASSERT_EQ(engine.recorder().is_recording(), false);
+    
+    ASSERT_TRUE(std::filesystem::exists(temp_file));
+    ASSERT_GT(std::filesystem::file_size(temp_file), 0u);
+    std::filesystem::remove(temp_file);
+}
+
+TEST(AudioEngineProcess_FullCoverageSweep) {
+    AudioEngine engine;
+    engine.initialize();
+    engine.set_buffer_size(64);
+    
+    // 1. Zero/Negative sample rate
+    engine.set_sample_rate(0);
+    std::vector<float> in(64, 1.5f), out(128, 0.0f);
+    engine.process_audio(in.data(), out.data(), 64);
+    
+    // 2. Restore sample rate, turn on analyzer, trigger clipping
+    engine.set_sample_rate(48000);
+    engine.set_analyzer_enabled(true);
+    engine.set_input_gain(2.0f); // Make it clip input
+    engine.set_output_gain(2.0f); // Make it clip output
+    
+    // 3. Process to hit clipping
+    engine.process_audio(in.data(), out.data(), 64);
+    ASSERT_TRUE(engine.consume_input_clipped());
+    ASSERT_TRUE(engine.consume_output_clipped());
+    
+    // 4. Invalid effect index in command queue
+    engine.push_effect_enabled(999, 1.0f);
+    engine.push_effect_mix(999, 0.5f);
+    engine.push_param_change(999, 0, 1.0f);
+    engine.process_audio(in.data(), out.data(), 64);
+
+    // 5. Test metronome with invalid counter logic coverage
+    engine.toggle_metronome();
+    engine.set_metronome_bpm(200); // Trigger BPM change
+    engine.set_metronome_volume(0.1f);
+    engine.process_audio(in.data(), out.data(), 64);
+
+    // 6. Test metronome disable mid-click
+    engine.toggle_metronome();
+    engine.process_audio(in.data(), out.data(), 64);
 }
