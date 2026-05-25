@@ -490,3 +490,42 @@ TEST(json_from_json_exceptions) {
     }
     ASSERT_TRUE(caught2);
 }
+
+TEST(json_from_ordered_json_missing_fields) {
+    // Actually the namespace requires us to use from_json_ext because ordered json hook is internal.
+    // So we just parse from string
+    PresetData p;
+    bool ok = from_json_ext(R"({
+        "format_version": 2,
+        "routing": "graph",
+        "name": "Missing Fields",
+        "nodes": [
+            { "id": "n1", "type": "test" }
+        ],
+        "links": []
+    })", p);
+    ASSERT_TRUE(ok);
+    ASSERT_EQ(p.nodes.size(), 1u);
+    ASSERT_EQ(p.nodes[0].id, "n1");
+    ASSERT_TRUE(p.nodes[0].enabled); // Default true
+    ASSERT_EQ(p.nodes[0].mix, 1.0f);
+}
+
+TEST(json_from_json_missing_fields) {
+    nlohmann::json j = nlohmann::json::parse(R"({
+        "format_version": 2,
+        "routing": "graph",
+        "name": "Missing Fields",
+        "nodes": [
+            { "id": "n1", "type": "test" }
+        ],
+        "links": []
+    })");
+    PresetData p;
+    from_json(j, p);
+    ASSERT_EQ(p.nodes.size(), 1u);
+    ASSERT_EQ(p.nodes[0].id, "n1");
+    ASSERT_TRUE(p.nodes[0].enabled); 
+    ASSERT_EQ(p.nodes[0].mix, 1.0f);
+}
+

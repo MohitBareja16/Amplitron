@@ -613,3 +613,156 @@ TEST(preset_config_roundtrip) {
     // runner is ephemeral.
 }
 
+TEST(preset_save_preset_data_invalid_path) {
+    PresetData p;
+    // Attempting to save to a non-existent root directory path should fail
+    bool saved = PresetManager::save_preset_data("/invalid_path_that_does_not_exist/preset.json", p);
+    ASSERT_FALSE(saved);
+}
+
+TEST(preset_load_preset_invalid_json) {
+    AudioEngine engine;
+    engine.initialize();
+
+    std::string path = "presets/invalid_preset_test.json";
+    std::ofstream f(path);
+    f << "{ this is not valid json";
+    f.close();
+
+    bool loaded = PresetManager::load_preset(path, engine);
+    ASSERT_FALSE(loaded);
+
+    std::remove(path.c_str());
+    engine.shutdown();
+}
+
+TEST(preset_load_preset_graph_failure) {
+    AudioEngine engine;
+    engine.initialize();
+
+    std::string path = "presets/invalid_graph_preset.json";
+    std::ofstream f(path);
+    f << R"({
+        "format_version": 2,
+        "routing": "graph",
+        "name": "Invalid Graph",
+        "nodes": [],
+        "links": [{"src_pin": "n1.out0", "dst_pin": "n2.in0"}]
+    })"; // This will fail during graph_from_json because nodes are missing
+    f.close();
+
+    bool loaded = PresetManager::load_preset(path, engine);
+    ASSERT_FALSE(loaded);
+
+    std::remove(path.c_str());
+    engine.shutdown();
+}
+
+TEST(preset_graph_from_json_parse_errors) {
+    // 1. Link parsing errors: invalid node ID format
+    std::string json1 = R"({
+        "format_version": 2,
+        "routing": "graph",
+        "name": "Bad Link",
+        "nodes": [
+            {"id": "n1", "type": "Input", "enabled": true, "mix": 1.0, "params": []},
+            {"id": "n2", "type": "Output", "enabled": true, "mix": 1.0, "params": []}
+        ],
+        "links": [{"src_pin": "n1.out0", "dst_pin": "invalid_node.in0"}]
+    })";
+    
+    AudioGraph graph1;
+    bool loaded1 = PresetManager::graph_from_json(json1, graph1);
+    ASSERT_FALSE(loaded1);
+
+    // 2. Link parsing errors: pin out of bounds
+    std::string json2 = R"({
+        "format_version": 2,
+        "routing": "graph",
+        "name": "Bad Pin Index",
+        "nodes": [
+            {"id": "n1", "type": "Input", "enabled": true, "mix": 1.0, "params": []},
+            {"id": "n2", "type": "Output", "enabled": true, "mix": 1.0, "params": []}
+        ],
+        "links": [{"src_pin": "n1.out999", "dst_pin": "n2.in0"}]
+    })";
+    
+    AudioGraph graph2;
+    bool loaded2 = PresetManager::graph_from_json(json2, graph2);
+    ASSERT_FALSE(loaded2);
+
+    // 3. Link parsing errors: missing pin
+    std::string json3 = R"({
+        "format_version": 2,
+        "routing": "graph",
+        "name": "Missing Pin Str",
+        "nodes": [
+            {"id": "n1", "type": "Input", "enabled": true, "mix": 1.0, "params": []},
+            {"id": "n2", "type": "Output", "enabled": true, "mix": 1.0, "params": []}
+        ],
+        "links": [{"src_pin": "n1", "dst_pin": "n2.in0"}]
+    })";
+    
+    AudioGraph graph3;
+    bool loaded3 = PresetManager::graph_from_json(json3, graph3);
+    ASSERT_FALSE(loaded3);
+}
+
+TEST(preset_graph_from_json_node_types) {
+    // Test custom node names mapped properly
+    std::string json = R"({
+        "format_version": 2,
+        "routing": "graph",
+        "name": "Node Types",
+        "nodes": [
+            {"id": "n1", "type": "splitter", "enabled": true, "mix": 1.0, "params": []},
+            {"id": "n2", "type": "mixer", "enabled": true, "mix": 1.0, "params": [], "num_inputs": 2},
+            {"id": "n3", "type": "amp_simulator", "enabled": true, "mix": 1.0, "params": []},
+            {"id": "n4", "type": "overdrive", "enabled": true, "mix": 1.0, "params": []},
+            {"id": "n5", "type": "distortion", "enabled": true, "mix": 1.0, "params": []},
+            {"id": "n6", "type": "cabinet", "enabled": true, "mix": 1.0, "params": []},
+            {"id": "n7", "type": "UnknownEffect", "enabled": true, "mix": 1.0, "params": []}
+        ],
+        "links": []
+    })";
+    
+    AudioGraph graph;
+    bool loaded = PresetManager::graph_from_json(json, graph);
+    ASSERT_TRUE(loaded);
+}
+
+// Internal function test via namespace alias
+namespace Amplitron {
+    extern void append_json_files(const std::string& dir, std::vector<std::string>& result);
+}
+
+TEST(preset_manager_append_json_files_invalid_dir) {
+    std::vector<std::string> results;
+    // We cannot access this directory
+    Amplitron::append_json_files("/path/that/does/not/exist", results);
+    ASSERT_EQ(results.size(), 0u);
+}
+
+TEST(preset_manager_apply_migrations) {
+    // 1. Valid migration
+    std::string json = "{\n  \"name\": \"Test\"\n}";
+    std::string migrated = PresetManager::apply_migrations(json);
+    ASSERT_TRUE(migrated.find("\"version\"") != std::string::npos);
+
+    // 2. Already versioned
+    std::string json2 = "{\n  \"version\": 1,\n  \"name\": \"Test\"\n}";
+    std::string migrated2 = PresetManager::apply_migrations(json2);
+    ASSERT_EQ(json2, migrated2);
+
+    // 3. Invalid JSON string
+    std::string json3 = "this is not json";
+    std::string migrated3 = PresetManager::apply_migrations(json3);
+    ASSERT_EQ(json3, migrated3);
+
+    // 4. Empty JSON object
+    std::string json4 = "{}";
+    std::string migrated4 = PresetManager::apply_migrations(json4);
+    ASSERT_TRUE(migrated4.find("\"version\"") != std::string::npos);
+}
+
+
