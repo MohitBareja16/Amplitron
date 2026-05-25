@@ -17,6 +17,31 @@
 
 namespace Amplitron {
 
+// Define the mock seams
+int (*g_mock_pa_get_device_count)() = nullptr;
+const PaDeviceInfo* (*g_mock_pa_get_device_info)(int) = nullptr;
+const PaHostApiInfo* (*g_mock_pa_get_host_api_info)(int) = nullptr;
+int (*g_mock_pa_get_host_api_count)() = nullptr;
+int (*g_mock_pa_host_api_device_index_to_device_index)(int, int) = nullptr;
+int (*g_mock_pa_get_default_input_device)() = nullptr;
+int (*g_mock_pa_get_default_output_device)() = nullptr;
+PaError (*g_mock_pa_open_stream)(PaStream**, const PaStreamParameters*, const PaStreamParameters*, double, unsigned long, PaStreamFlags, PaStreamCallback*, void*) = nullptr;
+PaError (*g_mock_pa_start_stream)(PaStream*) = nullptr;
+const PaStreamInfo* (*g_mock_pa_get_stream_info)(PaStream*) = nullptr;
+PaError (*g_mock_pa_initialize)() = nullptr;
+
+// Helper macros to transparently use mocks if set
+#define MOCK_OR_REAL_GET_DEVICE_COUNT() (g_mock_pa_get_device_count ? g_mock_pa_get_device_count() : Pa_GetDeviceCount())
+#define MOCK_OR_REAL_GET_DEVICE_INFO(i) (g_mock_pa_get_device_info ? g_mock_pa_get_device_info(i) : Pa_GetDeviceInfo(i))
+#define MOCK_OR_REAL_GET_HOST_API_INFO(i) (g_mock_pa_get_host_api_info ? g_mock_pa_get_host_api_info(i) : Pa_GetHostApiInfo(i))
+#define MOCK_OR_REAL_GET_HOST_API_COUNT() (g_mock_pa_get_host_api_count ? g_mock_pa_get_host_api_count() : Pa_GetHostApiCount())
+#define MOCK_OR_REAL_HOST_API_DEVICE_INDEX(a, d) (g_mock_pa_host_api_device_index_to_device_index ? g_mock_pa_host_api_device_index_to_device_index(a, d) : Pa_HostApiDeviceIndexToDeviceIndex(a, d))
+#define MOCK_OR_REAL_GET_DEFAULT_INPUT() (g_mock_pa_get_default_input_device ? g_mock_pa_get_default_input_device() : Pa_GetDefaultInputDevice())
+#define MOCK_OR_REAL_GET_DEFAULT_OUTPUT() (g_mock_pa_get_default_output_device ? g_mock_pa_get_default_output_device() : Pa_GetDefaultOutputDevice())
+#define MOCK_OR_REAL_INITIALIZE() (g_mock_pa_initialize ? g_mock_pa_initialize() : Pa_Initialize())
+
+
+
 // PortAudio callback
 int pa_audio_callback(const void* input, void* output,
                               unsigned long frame_count,
@@ -38,16 +63,16 @@ int pa_audio_callback(const void* input, void* output,
 
 // Device auto-detection
 static void auto_detect_devices(int& input_device, int& output_device, int& sample_rate) {
-    int device_count = Pa_GetDeviceCount();
-    int num_apis = Pa_GetHostApiCount();
+    int device_count = MOCK_OR_REAL_GET_DEVICE_COUNT();
+    int num_apis = MOCK_OR_REAL_GET_HOST_API_COUNT();
 
     // Phase 1: Print all devices
     std::cout << "\nDetected audio devices:" << std::endl;
     for (int i = 0; i < device_count; ++i) {
-        const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
+        const PaDeviceInfo* info = MOCK_OR_REAL_GET_DEVICE_INFO(i);
         if (!info) continue;
         bool is_usb = is_usb_device_name(info->name);
-        const PaHostApiInfo* api = Pa_GetHostApiInfo(info->hostApi);
+        const PaHostApiInfo* api = MOCK_OR_REAL_GET_HOST_API_INFO(info->hostApi);
         const char* api_name = api ? api->name : "Unknown";
         if (info->maxInputChannels > 0) {
             std::cout << "  [IN]  " << info->name
@@ -73,7 +98,7 @@ static void auto_detect_devices(int& input_device, int& output_device, int& samp
 
     std::vector<ApiCandidate> candidates;
     for (int a = 0; a < num_apis; ++a) {
-        const PaHostApiInfo* api = Pa_GetHostApiInfo(a);
+        const PaHostApiInfo* api = MOCK_OR_REAL_GET_HOST_API_INFO(a);
         if (!api) continue;
 
         ApiCandidate c;
@@ -84,8 +109,8 @@ static void auto_detect_devices(int& input_device, int& output_device, int& samp
         c.api_name = api->name;
 
         for (int d = 0; d < api->deviceCount; ++d) {
-            int dev_idx = Pa_HostApiDeviceIndexToDeviceIndex(a, d);
-            const PaDeviceInfo* info = Pa_GetDeviceInfo(dev_idx);
+            int dev_idx = MOCK_OR_REAL_HOST_API_DEVICE_INDEX(a, d);
+            const PaDeviceInfo* info = MOCK_OR_REAL_GET_DEVICE_INFO(dev_idx);
             if (!info) continue;
 
             bool is_usb = is_usb_device_name(info->name);
@@ -101,8 +126,8 @@ static void auto_detect_devices(int& input_device, int& output_device, int& samp
 
         if (c.best_output < 0) {
             for (int d = 0; d < api->deviceCount; ++d) {
-                int dev_idx = Pa_HostApiDeviceIndexToDeviceIndex(a, d);
-                const PaDeviceInfo* info = Pa_GetDeviceInfo(dev_idx);
+                int dev_idx = MOCK_OR_REAL_HOST_API_DEVICE_INDEX(a, d);
+                const PaDeviceInfo* info = MOCK_OR_REAL_GET_DEVICE_INFO(dev_idx);
                 if (!info) continue;
                 if (!is_usb_device_name(info->name) && info->maxOutputChannels > 0) {
                     c.best_output = dev_idx;
@@ -126,8 +151,8 @@ static void auto_detect_devices(int& input_device, int& output_device, int& samp
             input_device = c.usb_input;
             output_device = c.best_output;
 
-            const PaDeviceInfo* in_info = Pa_GetDeviceInfo(input_device);
-            const PaDeviceInfo* out_info = Pa_GetDeviceInfo(output_device);
+            const PaDeviceInfo* in_info = MOCK_OR_REAL_GET_DEVICE_INFO(input_device);
+            const PaDeviceInfo* out_info = MOCK_OR_REAL_GET_DEVICE_INFO(output_device);
 
             std::cout << "\n>> Auto-selected (same API: " << c.api_name << "):" << std::endl;
             std::cout << "   INPUT:  " << in_info->name << " [USB Guitar Cable]" << std::endl;
@@ -147,10 +172,10 @@ static void auto_detect_devices(int& input_device, int& output_device, int& samp
     if (!found_pair) {
         for (auto& c : candidates) {
             if (c.best_output >= 0) {
-                const PaHostApiInfo* api = Pa_GetHostApiInfo(c.api_index);
+                const PaHostApiInfo* api = MOCK_OR_REAL_GET_HOST_API_INFO(c.api_index);
                 for (int d = 0; d < api->deviceCount; ++d) {
-                    int dev_idx = Pa_HostApiDeviceIndexToDeviceIndex(c.api_index, d);
-                    const PaDeviceInfo* info = Pa_GetDeviceInfo(dev_idx);
+                    int dev_idx = MOCK_OR_REAL_HOST_API_DEVICE_INDEX(c.api_index, d);
+                    const PaDeviceInfo* info = MOCK_OR_REAL_GET_DEVICE_INFO(dev_idx);
                     if (info && info->maxInputChannels > 0) {
                         input_device = dev_idx;
                         output_device = c.best_output;
@@ -158,7 +183,7 @@ static void auto_detect_devices(int& input_device, int& output_device, int& samp
                         std::cout << "\n>> No USB guitar cable detected." << std::endl;
                         std::cout << "   Using " << c.api_name << " defaults:" << std::endl;
                         std::cout << "   INPUT:  " << info->name << std::endl;
-                        std::cout << "   OUTPUT: " << Pa_GetDeviceInfo(output_device)->name << std::endl;
+                        std::cout << "   OUTPUT: " << MOCK_OR_REAL_GET_DEVICE_INFO(output_device)->name << std::endl;
 
                         found_pair = true;
                         break;
@@ -171,14 +196,14 @@ static void auto_detect_devices(int& input_device, int& output_device, int& samp
 
     // Last resort: system defaults
     if (!found_pair) {
-        input_device = Pa_GetDefaultInputDevice();
-        output_device = Pa_GetDefaultOutputDevice();
+        input_device = MOCK_OR_REAL_GET_DEFAULT_INPUT();
+        output_device = MOCK_OR_REAL_GET_DEFAULT_OUTPUT();
         std::cout << "\n>> Using system default input/output devices." << std::endl;
     }
 }
 
 bool AudioEngine::initialize() {
-    PaError err = Pa_Initialize();
+    PaError err = MOCK_OR_REAL_INITIALIZE();
     if (err != paNoError) {
         std::cerr << "PortAudio init failed: " << Pa_GetErrorText(err) << std::endl;
         return false;
@@ -203,8 +228,8 @@ void AudioEngine::shutdown() {
 bool AudioEngine::start() {
     if (!initialized_ || running_) return false;
 
-    const PaDeviceInfo* in_dev = Pa_GetDeviceInfo(input_device_);
-    const PaDeviceInfo* out_dev = Pa_GetDeviceInfo(output_device_);
+    const PaDeviceInfo* in_dev = MOCK_OR_REAL_GET_DEVICE_INFO(input_device_);
+    const PaDeviceInfo* out_dev = MOCK_OR_REAL_GET_DEVICE_INFO(output_device_);
     (void)in_dev; (void)out_dev;
 
     double desired_latency = static_cast<double>(buffer_size_) / sample_rate_;
@@ -227,7 +252,7 @@ bool AudioEngine::start() {
     PaWasapiStreamInfo wasapi_in_info = {};
     PaWasapiStreamInfo wasapi_out_info = {};
     if (in_dev) {
-        const PaHostApiInfo* api = Pa_GetHostApiInfo(in_dev->hostApi);
+        const PaHostApiInfo* api = MOCK_OR_REAL_GET_HOST_API_INFO(in_dev->hostApi);
         if (api && api->type == paWASAPI) {
             wasapi_in_info.size = sizeof(PaWasapiStreamInfo);
             wasapi_in_info.hostApiType = paWASAPI;
@@ -248,7 +273,7 @@ bool AudioEngine::start() {
 
     unsigned long frames = static_cast<unsigned long>(buffer_size_);
 
-    PaError err = Pa_OpenStream(
+    PaError err = g_mock_pa_open_stream ? g_mock_pa_open_stream(&backend_->stream, &input_params, &output_params, sample_rate_, frames, paClipOff | paDitherOff, pa_audio_callback, this) : Pa_OpenStream(
         &backend_->stream,
         &input_params,
         &output_params,
@@ -262,7 +287,7 @@ bool AudioEngine::start() {
     if (err != paNoError) {
         std::cerr << "Failed to open stream: " << Pa_GetErrorText(err) << std::endl;
         std::cerr << "Retrying with buffer size " << buffer_size_ << "..." << std::endl;
-        err = Pa_OpenStream(
+        err = g_mock_pa_open_stream ? g_mock_pa_open_stream(&backend_->stream, &input_params, &output_params, sample_rate_, buffer_size_, paClipOff | paDitherOff, pa_audio_callback, this) : Pa_OpenStream(
             &backend_->stream,
             &input_params,
             &output_params,
@@ -278,7 +303,7 @@ bool AudioEngine::start() {
         }
     }
 
-    const PaStreamInfo* si = Pa_GetStreamInfo(backend_->stream);
+    const PaStreamInfo* si = g_mock_pa_get_stream_info ? g_mock_pa_get_stream_info(backend_->stream) : Pa_GetStreamInfo(backend_->stream);
     if (si && si->sampleRate > 0.0) {
         const int actual_rate = static_cast<int>(si->sampleRate + 0.5);
         if (actual_rate != sample_rate_) {
@@ -298,7 +323,7 @@ bool AudioEngine::start() {
         }
     }
 
-    err = Pa_StartStream(backend_->stream);
+    err = g_mock_pa_start_stream ? g_mock_pa_start_stream(backend_->stream) : Pa_StartStream(backend_->stream);
     if (err != paNoError) {
         std::cerr << "Failed to start stream: " << Pa_GetErrorText(err) << std::endl;
         Pa_CloseStream(backend_->stream);
@@ -307,9 +332,9 @@ bool AudioEngine::start() {
     }
 
     running_ = true;
-    si = Pa_GetStreamInfo(backend_->stream);
-    const PaDeviceInfo* in_info = Pa_GetDeviceInfo(input_device_);
-    const PaDeviceInfo* out_info = Pa_GetDeviceInfo(output_device_);
+    si = g_mock_pa_get_stream_info ? g_mock_pa_get_stream_info(backend_->stream) : Pa_GetStreamInfo(backend_->stream);
+    const PaDeviceInfo* in_info = MOCK_OR_REAL_GET_DEVICE_INFO(input_device_);
+    const PaDeviceInfo* out_info = MOCK_OR_REAL_GET_DEVICE_INFO(output_device_);
     std::cout << "Audio stream started:" << std::endl;
     std::cout << "  Input:   " << (in_info ? in_info->name : "Unknown") << std::endl;
     std::cout << "  Output:  " << (out_info ? out_info->name : "Unknown") << std::endl;
