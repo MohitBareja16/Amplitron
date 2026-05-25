@@ -27,6 +27,8 @@ int (*g_mock_pa_get_default_input_device)() = nullptr;
 int (*g_mock_pa_get_default_output_device)() = nullptr;
 PaError (*g_mock_pa_open_stream)(PaStream**, const PaStreamParameters*, const PaStreamParameters*, double, unsigned long, PaStreamFlags, PaStreamCallback*, void*) = nullptr;
 PaError (*g_mock_pa_start_stream)(PaStream*) = nullptr;
+PaError (*g_mock_pa_stop_stream)(PaStream*) = nullptr;
+PaError (*g_mock_pa_close_stream)(PaStream*) = nullptr;
 const PaStreamInfo* (*g_mock_pa_get_stream_info)(PaStream*) = nullptr;
 PaError (*g_mock_pa_initialize)() = nullptr;
 
@@ -326,7 +328,8 @@ bool AudioEngine::start() {
     err = g_mock_pa_start_stream ? g_mock_pa_start_stream(backend_->stream) : Pa_StartStream(backend_->stream);
     if (err != paNoError) {
         std::cerr << "Failed to start stream: " << Pa_GetErrorText(err) << std::endl;
-        Pa_CloseStream(backend_->stream);
+        if (g_mock_pa_close_stream) g_mock_pa_close_stream(backend_->stream);
+        else Pa_CloseStream(backend_->stream);
         backend_->stream = nullptr;
         return false;
     }
@@ -349,10 +352,12 @@ bool AudioEngine::start() {
 void AudioEngine::stop() {
     if (backend_->stream) {
         if (running_) {
-            Pa_StopStream(backend_->stream);
+            if (g_mock_pa_stop_stream) g_mock_pa_stop_stream(backend_->stream);
+            else Pa_StopStream(backend_->stream);
             running_ = false;
         }
-        Pa_CloseStream(backend_->stream);
+        if (g_mock_pa_close_stream) g_mock_pa_close_stream(backend_->stream);
+        else Pa_CloseStream(backend_->stream);
         backend_->stream = nullptr;
     }
 }

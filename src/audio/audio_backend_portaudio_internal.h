@@ -23,6 +23,8 @@ extern int (*g_mock_pa_get_default_output_device)();
 
 extern PaError (*g_mock_pa_open_stream)(PaStream**, const PaStreamParameters*, const PaStreamParameters*, double, unsigned long, PaStreamFlags, PaStreamCallback*, void*);
 extern PaError (*g_mock_pa_start_stream)(PaStream*);
+extern PaError (*g_mock_pa_stop_stream)(PaStream*);
+extern PaError (*g_mock_pa_close_stream)(PaStream*);
 extern const PaStreamInfo* (*g_mock_pa_get_stream_info)(PaStream*);
 extern PaError (*g_mock_pa_initialize)();
 
