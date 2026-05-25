@@ -1,3 +1,4 @@
+#include <sys/stat.h>
 #include "audio/audio_engine.h"
 #include "audio/effects/compressor.h"
 #include "audio/effects/equalizer.h"
@@ -764,5 +765,126 @@ TEST(preset_manager_apply_migrations) {
     std::string migrated4 = PresetManager::apply_migrations(json4);
     ASSERT_TRUE(migrated4.find("\"version\"") != std::string::npos);
 }
+
+TEST(preset_manager_config_no_home) {
+    // Unset HOME
+    const char* old_home = std::getenv("HOME");
+    std::string home_str = old_home ? old_home : "";
+#ifdef _WIN32
+    _putenv("APPDATA=");
+#else
+    unsetenv("HOME");
+#endif
+
+    PresetManager::save_config(); // This should save to amplitron_config.json
+    PresetManager::load_config(); // This should load from amplitron_config.json
+
+#ifdef _WIN32
+    if (!home_str.empty()) {
+        std::string env = "APPDATA=" + home_str;
+        _putenv(env.c_str());
+    }
+#else
+    if (!home_str.empty()) {
+        setenv("HOME", home_str.c_str(), 1);
+    }
+#endif
+    
+    // Clean up
+    std::remove("amplitron_config.json");
+}
+
+TEST(preset_manager_get_presets_dir_no_home) {
+    PresetManager::set_presets_dir(""); // Clear custom
+    const char* old_home = std::getenv("HOME");
+    std::string home_str = old_home ? old_home : "";
+#ifdef _WIN32
+    _putenv("APPDATA=");
+#else
+    unsetenv("HOME");
+#endif
+
+    std::string dir = PresetManager::get_presets_dir();
+    ASSERT_EQ(dir, "presets");
+
+#ifdef _WIN32
+    if (!home_str.empty()) {
+        std::string env = "APPDATA=" + home_str;
+        _putenv(env.c_str());
+    }
+#else
+    if (!home_str.empty()) {
+        setenv("HOME", home_str.c_str(), 1);
+    }
+#endif
+}
+
+TEST(preset_manager_save_config_failure) {
+    const char* old_home = std::getenv("HOME");
+    std::string home_str = old_home ? old_home : "";
+#ifdef _WIN32
+    _putenv("APPDATA=");
+#else
+    unsetenv("HOME");
+#endif
+    
+    // Create a directory named amplitron_config.json to force ofstream to fail
+    std::filesystem::create_directories("amplitron_config.json");
+    
+    PresetManager::save_config(); // This should fail gracefully
+    
+    std::filesystem::remove("amplitron_config.json");
+#ifdef _WIN32
+    if (!home_str.empty()) {
+        std::string env = "APPDATA=" + home_str;
+        _putenv(env.c_str());
+    }
+#else
+    if (!home_str.empty()) {
+        setenv("HOME", home_str.c_str(), 1);
+    }
+#endif
+}
+
+TEST(preset_manager_append_json_files_exception) {
+    // Try to append files from a file path instead of a directory
+    // This will cause std::filesystem::directory_iterator to throw
+    std::ofstream f("test_fake_dir.txt");
+    f << "test";
+    f.close();
+    
+    std::vector<std::string> results;
+    Amplitron::append_json_files("test_fake_dir.txt", results);
+    ASSERT_EQ(results.size(), 0u);
+    
+    std::remove("test_fake_dir.txt");
+}
+
+TEST(preset_manager_save_factory_presets_write_failure) {
+    std::string test_dir = "presets_readonly_test";
+    std::filesystem::create_directories(test_dir);
+    
+    // Create a dummy file in presets to act as bundled
+    std::filesystem::create_directories("presets");
+    std::ofstream f("presets/dummy_factory.json");
+    f << "{}";
+    f.close();
+    
+    // Make directory read-only
+#ifndef _WIN32
+    chmod(test_dir.c_str(), 0555);
+#endif
+
+    // This should attempt to copy factory presets to test_dir but fail on write
+    PresetManager::set_presets_dir(test_dir);
+
+    // Cleanup
+#ifndef _WIN32
+    chmod(test_dir.c_str(), 0777);
+#endif
+    std::filesystem::remove_all(test_dir);
+    std::filesystem::remove("presets/dummy_factory.json");
+}
+
 
 

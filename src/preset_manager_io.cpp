@@ -356,16 +356,6 @@ bool PresetManager::graph_from_json(const std::string &json,
   for (int id : nodes_to_remove)
     graph.remove_node(id);
 
-  // Parse node IDs
-  auto parse_id = [](const std::string &id_str) -> int {
-    if (id_str.length() > 1 && id_str[0] == 'n') {
-      try {
-        return std::stoi(id_str.substr(1));
-      } catch (...) {
-      }
-    }
-    return -1;
-  };
 
   std::map<std::string, int> node_id_map;
   for (const auto &node : preset.nodes) {

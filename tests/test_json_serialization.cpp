@@ -529,3 +529,113 @@ TEST(json_from_json_missing_fields) {
     ASSERT_EQ(p.nodes[0].mix, 1.0f);
 }
 
+TEST(json_from_json_invalid_types_skipped) {
+    nlohmann::json j = nlohmann::json::parse(R"({
+        "type": "Delay",
+        "params": {
+            "Valid": 1.0,
+            "Invalid": "string_instead_of_number"
+        },
+        "metadata": {
+            "ValidMeta": "string",
+            "InvalidMeta": 123
+        }
+    })");
+    PresetData::EffectData fx;
+    from_json(j, fx);
+    
+    ASSERT_EQ(fx.params.size(), 1u);
+    ASSERT_EQ(fx.params[0].first, "Valid");
+    ASSERT_EQ(fx.metadata.size(), 1u);
+    ASSERT_EQ(fx.metadata["ValidMeta"], "string");
+}
+
+TEST(json_from_json_node_invalid_types_skipped) {
+    nlohmann::json j = nlohmann::json::parse(R"({
+        "routing": "graph",
+        "name": "Test",
+        "nodes": [
+            {
+                "id": "n1",
+                "type": "Delay",
+                "params": {
+                    "Valid": 1.0,
+                    "Invalid": "string"
+                },
+                "metadata": {
+                    "ValidMeta": "string",
+                    "InvalidMeta": 123
+                }
+            }
+        ],
+        "links": []
+    })");
+    PresetData p;
+    from_json(j, p);
+    
+    ASSERT_EQ(p.nodes.size(), 1u);
+    ASSERT_EQ(p.nodes[0].params.size(), 1u);
+    ASSERT_EQ(p.nodes[0].params[0].first, "Valid");
+    ASSERT_EQ(p.nodes[0].metadata.size(), 1u);
+    ASSERT_EQ(p.nodes[0].metadata["ValidMeta"], "string");
+}
+
+TEST(json_from_ordered_json_invalid_types_skipped) {
+    PresetData p;
+    bool ok = from_json_ext(R"({
+        "format_version": 2,
+        "routing": "graph",
+        "name": "Test",
+        "nodes": [
+            {
+                "id": "n1",
+                "type": "Delay",
+                "params": {
+                    "Valid": 1.0,
+                    "Invalid": "string"
+                },
+                "metadata": {
+                    "ValidMeta": "string",
+                    "InvalidMeta": 123
+                }
+            }
+        ],
+        "links": []
+    })", p);
+    
+    ASSERT_TRUE(ok);
+    ASSERT_EQ(p.nodes.size(), 1u);
+    ASSERT_EQ(p.nodes[0].params.size(), 1u);
+    ASSERT_EQ(p.nodes[0].params[0].first, "Valid");
+    ASSERT_EQ(p.nodes[0].metadata.size(), 1u);
+    ASSERT_EQ(p.nodes[0].metadata["ValidMeta"], "string");
+}
+
+TEST(json_from_ordered_json_effect_invalid_types_skipped) {
+    PresetData p;
+    bool ok = from_json_ext(R"({
+        "format_version": 2,
+        "routing": "linear",
+        "name": "Test",
+        "effects": [
+            {
+                "type": "Delay",
+                "params": {
+                    "Valid": 1.0,
+                    "Invalid": "string"
+                },
+                "metadata": {
+                    "ValidMeta": "string",
+                    "InvalidMeta": 123
+                }
+            }
+        ]
+    })", p);
+    
+    ASSERT_TRUE(ok);
+    ASSERT_EQ(p.effects.size(), 1u);
+    ASSERT_EQ(p.effects[0].params.size(), 1u);
+    ASSERT_EQ(p.effects[0].metadata.size(), 1u);
+}
+
+
