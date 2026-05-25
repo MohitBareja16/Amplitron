@@ -716,8 +716,38 @@ TEST(json_from_json_missing_links_throws) {
     nlohmann::json j = nlohmann::json::parse(R"({"routing": "graph", "nodes": []})");
     PresetData p;
     ASSERT_THROW(from_json(j, p), std::invalid_argument);
+}TEST(json_midi_mapping) {
+    PresetData p;
+    p.routing = "linear";
+    MidiMapping m;
+    m.cc_number = 7;
+    m.midi_channel = 1;
+    m.target_type = MidiTargetType::EffectParam;
+    m.mode = MidiMappingMode::Continuous;
+    m.effect_name = "Delay";
+    m.param_name = "Mix";
+    p.midi_mappings.push_back(m);
+    
+    std::string json_str = to_json_ext(p);
+    PresetData p2;
+    from_json_ext(json_str, p2);
+    
+    ASSERT_EQ(p2.midi_mappings.size(), 1u);
+    ASSERT_EQ(p2.midi_mappings[0].cc_number, 7);
+    ASSERT_EQ(p2.midi_mappings[0].midi_channel, 1);
+    ASSERT_EQ(p2.midi_mappings[0].effect_name, "Delay");
+    ASSERT_EQ(p2.midi_mappings[0].param_name, "Mix");
 }
 
+TEST(json_midi_mapping_missing_fields) {
+    nlohmann::json j = nlohmann::json::parse(R"({"routing": "linear", "midi_mappings": [{}]})");
+    PresetData p;
+    from_json(j, p);
+    ASSERT_EQ(p.midi_mappings.size(), 1u);
+    ASSERT_EQ(p.midi_mappings[0].cc_number, 0);
+    ASSERT_EQ(p.midi_mappings[0].midi_channel, -1);
+    ASSERT_EQ(p.midi_mappings[0].effect_name, "");
+}
 
 
 

@@ -1,14 +1,14 @@
-#include <sys/stat.h>
 #include "audio/audio_engine.h"
+#include "audio/effects/cabinet_sim.h"
 #include "audio/effects/compressor.h"
 #include "audio/effects/equalizer.h"
 #include "audio/effects/noise_gate.h"
 #include "audio/effects/overdrive.h"
 #include "audio/effects/reverb.h"
-#include "audio/effects/cabinet_sim.h"
 #include "gui/gui_graph_state.h"
 #include "preset_manager.h"
 #include "test_framework.h"
+#include <sys/stat.h>
 
 #include <cstdio>
 #include <cstring>
@@ -458,18 +458,17 @@ TEST(preset_graph_missing_links_throws) {
   ASSERT_FALSE(loaded);
 }
 
-static void write_dummy_wav(const std::string& path) {
-    std::ofstream out(path, std::ios::binary);
-    if (!out.is_open()) return;
-    const unsigned char header[44] = {
-        'R','I','F','F', 40,0,0,0, 'W','A','V','E',
-        'f','m','t',' ', 16,0,0,0, 1,0, 1,0,
-        68,172,0,0, 136,88,1,0, 2,0, 16,0,
-        'd','a','t','a', 4,0,0,0
-    };
-    out.write(reinterpret_cast<const char*>(header), 44);
-    const unsigned char data[4] = {0, 0, 0, 0};
-    out.write(reinterpret_cast<const char*>(data), 4);
+static void write_dummy_wav(const std::string &path) {
+  std::ofstream out(path, std::ios::binary);
+  if (!out.is_open())
+    return;
+  const unsigned char header[44] = {
+      'R', 'I', 'F', 'F', 40, 0, 0,   0,   'W', 'A', 'V', 'E', 'f', 'm', 't',
+      ' ', 16,  0,   0,   0,  1, 0,   1,   0,   68,  172, 0,   0,   136, 88,
+      1,   0,   2,   0,   16, 0, 'd', 'a', 't', 'a', 4,   0,   0,   0};
+  out.write(reinterpret_cast<const char *>(header), 44);
+  const unsigned char data[4] = {0, 0, 0, 0};
+  out.write(reinterpret_cast<const char *>(data), 4);
 }
 
 TEST(preset_legacy_ir_cabinet_migration) {
@@ -488,7 +487,7 @@ TEST(preset_legacy_ir_cabinet_migration) {
       }
     ]
   })";
-  
+
   std::string path = "presets/test_legacy_ir_cab.json";
   std::ofstream out(path);
   out << json;
@@ -498,19 +497,19 @@ TEST(preset_legacy_ir_cabinet_migration) {
   engine.initialize();
   bool loaded = PresetManager::load_preset(path, engine);
   ASSERT_TRUE(loaded);
-  
+
   bool found_cab = false;
   for (const auto &n : engine.graph().get_nodes()) {
     if (n.pedal && n.pedal->name() == std::string("Cabinet")) {
       found_cab = true;
-      auto* cab = dynamic_cast<CabinetSim*>(n.pedal.get());
+      auto *cab = dynamic_cast<CabinetSim *>(n.pedal.get());
       if (cab) {
         ASSERT_EQ(cab->ir_path(), "test.wav");
       }
     }
   }
   ASSERT_TRUE(found_cab);
-  
+
   std::remove("test.wav");
   std::remove(path.c_str());
   engine.shutdown();
@@ -534,16 +533,16 @@ TEST(preset_graph_cabinet_ir_loading) {
     ],
     "links": []
   })";
-  
+
   AudioGraph graph;
   bool loaded = PresetManager::graph_from_json(json, graph);
   ASSERT_TRUE(loaded);
-  
+
   bool found_cab = false;
   for (const auto &n : graph.get_nodes()) {
     if (n.pedal && n.pedal->name() == std::string("Cabinet")) {
       found_cab = true;
-      auto* cab = dynamic_cast<CabinetSim*>(n.pedal.get());
+      auto *cab = dynamic_cast<CabinetSim *>(n.pedal.get());
       if (cab) {
         ASSERT_EQ(cab->ir_path(), "my_ir.wav");
       }
@@ -570,11 +569,11 @@ TEST(preset_graph_widened_mixer) {
     ],
     "links": []
   })";
-  
+
   AudioGraph graph;
   bool loaded = PresetManager::graph_from_json(json, graph);
   ASSERT_TRUE(loaded);
-  
+
   bool found_mixer = false;
   for (const auto &n : graph.get_nodes()) {
     if (n.routing_type == NodeRoutingType::Mixer) {
@@ -586,82 +585,83 @@ TEST(preset_graph_widened_mixer) {
 }
 
 TEST(preset_config_roundtrip) {
-    // Save original config to restore later
-    std::string original_dir = PresetManager::get_presets_dir();
+  // Save original config to restore later
+  std::string original_dir = PresetManager::get_presets_dir();
 
-    // Test load_config when it might not exist (shouldn't crash)
-    PresetManager::load_config(); 
+  // Test load_config when it might not exist (shouldn't crash)
+  PresetManager::load_config();
 
-    // Set custom dir and save
-    std::string test_dir = "presets_custom_test_dir";
-    PresetManager::set_presets_dir(test_dir);
-    PresetManager::save_config();
+  // Set custom dir and save
+  std::string test_dir = "presets_custom_test_dir";
+  PresetManager::set_presets_dir(test_dir);
+  PresetManager::save_config();
 
-    // Clear it and reload from config
-    PresetManager::set_presets_dir("");
-    PresetManager::load_config();
-    
-    // It should have loaded our custom dir
-    std::string loaded_dir = PresetManager::get_presets_dir();
-    // Path resolution might vary by OS, but it should contain our test dir name
-    ASSERT_TRUE(loaded_dir.find(test_dir) != std::string::npos);
+  // Clear it and reload from config
+  PresetManager::set_presets_dir("");
+  PresetManager::load_config();
 
-    // Cleanup
-    PresetManager::set_presets_dir("");
-    std::filesystem::remove_all(test_dir);
-    
-    // We should ideally restore the config here if it was changed, but the test 
-    // runner is ephemeral.
+  // It should have loaded our custom dir
+  std::string loaded_dir = PresetManager::get_presets_dir();
+  // Path resolution might vary by OS, but it should contain our test dir name
+  ASSERT_TRUE(loaded_dir.find(test_dir) != std::string::npos);
+
+  // Cleanup
+  PresetManager::set_presets_dir("");
+  std::filesystem::remove_all(test_dir);
+
+  // We should ideally restore the config here if it was changed, but the test
+  // runner is ephemeral.
 }
 
 TEST(preset_save_preset_data_invalid_path) {
-    PresetData p;
-    // Attempting to save to a non-existent root directory path should fail
-    bool saved = PresetManager::save_preset_data("/invalid_path_that_does_not_exist/preset.json", p);
-    ASSERT_FALSE(saved);
+  PresetData p;
+  // Attempting to save to a non-existent root directory path should fail
+  bool saved = PresetManager::save_preset_data(
+      "/invalid_path_that_does_not_exist/preset.json", p);
+  ASSERT_FALSE(saved);
 }
 
 TEST(preset_load_preset_invalid_json) {
-    AudioEngine engine;
-    engine.initialize();
+  AudioEngine engine;
+  engine.initialize();
 
-    std::string path = "presets/invalid_preset_test.json";
-    std::ofstream f(path);
-    f << "{ this is not valid json";
-    f.close();
+  std::string path = "presets/invalid_preset_test.json";
+  std::ofstream f(path);
+  f << "{ this is not valid json";
+  f.close();
 
-    bool loaded = PresetManager::load_preset(path, engine);
-    ASSERT_FALSE(loaded);
+  bool loaded = PresetManager::load_preset(path, engine);
+  ASSERT_FALSE(loaded);
 
-    std::remove(path.c_str());
-    engine.shutdown();
+  std::remove(path.c_str());
+  engine.shutdown();
 }
 
 TEST(preset_load_preset_graph_failure) {
-    AudioEngine engine;
-    engine.initialize();
+  AudioEngine engine;
+  engine.initialize();
 
-    std::string path = "presets/invalid_graph_preset.json";
-    std::ofstream f(path);
-    f << R"({
+  std::string path = "presets/invalid_graph_preset.json";
+  std::ofstream f(path);
+  f << R"({
         "format_version": 2,
         "routing": "graph",
         "name": "Invalid Graph",
         "nodes": [],
         "links": [{"src_pin": "n1.out0", "dst_pin": "n2.in0"}]
     })"; // This will fail during graph_from_json because nodes are missing
-    f.close();
+  f.close();
 
-    bool loaded = PresetManager::load_preset(path, engine);
-    ASSERT_FALSE(loaded);
+  bool loaded = PresetManager::load_preset(path, engine);
+  ASSERT_FALSE(loaded);
 
-    std::remove(path.c_str());
-    engine.shutdown();
+  std::remove(path.c_str());
+  engine.shutdown();
 }
 
 TEST(preset_graph_from_json_parse_errors) {
-    // 1. Link parsing errors: invalid node ID format
-    std::string json1 = R"({
+  // 1. Link parsing errors: invalid node ID format
+  std::string json1 = R"({
         "format_version": 2,
         "routing": "graph",
         "name": "Bad Link",
@@ -671,13 +671,13 @@ TEST(preset_graph_from_json_parse_errors) {
         ],
         "links": [{"src_pin": "n1.out0", "dst_pin": "invalid_node.in0"}]
     })";
-    
-    AudioGraph graph1;
-    bool loaded1 = PresetManager::graph_from_json(json1, graph1);
-    ASSERT_FALSE(loaded1);
 
-    // 2. Link parsing errors: pin out of bounds
-    std::string json2 = R"({
+  AudioGraph graph1;
+  bool loaded1 = PresetManager::graph_from_json(json1, graph1);
+  ASSERT_FALSE(loaded1);
+
+  // 2. Link parsing errors: pin out of bounds
+  std::string json2 = R"({
         "format_version": 2,
         "routing": "graph",
         "name": "Bad Pin Index",
@@ -687,13 +687,13 @@ TEST(preset_graph_from_json_parse_errors) {
         ],
         "links": [{"src_pin": "n1.out999", "dst_pin": "n2.in0"}]
     })";
-    
-    AudioGraph graph2;
-    bool loaded2 = PresetManager::graph_from_json(json2, graph2);
-    ASSERT_FALSE(loaded2);
 
-    // 3. Link parsing errors: missing pin
-    std::string json3 = R"({
+  AudioGraph graph2;
+  bool loaded2 = PresetManager::graph_from_json(json2, graph2);
+  ASSERT_FALSE(loaded2);
+
+  // 3. Link parsing errors: missing pin
+  std::string json3 = R"({
         "format_version": 2,
         "routing": "graph",
         "name": "Missing Pin Str",
@@ -703,15 +703,15 @@ TEST(preset_graph_from_json_parse_errors) {
         ],
         "links": [{"src_pin": "n1", "dst_pin": "n2.in0"}]
     })";
-    
-    AudioGraph graph3;
-    bool loaded3 = PresetManager::graph_from_json(json3, graph3);
-    ASSERT_FALSE(loaded3);
+
+  AudioGraph graph3;
+  bool loaded3 = PresetManager::graph_from_json(json3, graph3);
+  ASSERT_FALSE(loaded3);
 }
 
 TEST(preset_graph_from_json_node_types) {
-    // Test custom node names mapped properly
-    std::string json = R"({
+  // Test custom node names mapped properly
+  std::string json = R"({
         "format_version": 2,
         "routing": "graph",
         "name": "Node Types",
@@ -726,168 +726,169 @@ TEST(preset_graph_from_json_node_types) {
         ],
         "links": []
     })";
-    
-    AudioGraph graph;
-    bool loaded = PresetManager::graph_from_json(json, graph);
-    ASSERT_TRUE(loaded);
+
+  AudioGraph graph;
+  bool loaded = PresetManager::graph_from_json(json, graph);
+  ASSERT_TRUE(loaded);
 }
 
 // Internal function test via namespace alias
 namespace Amplitron {
-    extern void append_json_files(const std::string& dir, std::vector<std::string>& result);
+extern void append_json_files(const std::string &dir,
+                              std::vector<std::string> &result);
 }
 
 TEST(preset_manager_append_json_files_invalid_dir) {
-    std::vector<std::string> results;
-    // We cannot access this directory
-    Amplitron::append_json_files("/path/that/does/not/exist", results);
-    ASSERT_EQ(results.size(), 0u);
+  std::vector<std::string> results;
+  // We cannot access this directory
+  Amplitron::append_json_files("/path/that/does/not/exist", results);
+  ASSERT_EQ(results.size(), 0u);
 }
 
 TEST(preset_manager_apply_migrations) {
-    // 1. Valid migration
-    std::string json = "{\n  \"name\": \"Test\"\n}";
-    std::string migrated = PresetManager::apply_migrations(json);
-    ASSERT_TRUE(migrated.find("\"version\"") != std::string::npos);
+  // 1. Valid migration
+  std::string json = "{\n  \"name\": \"Test\"\n}";
+  std::string migrated = PresetManager::apply_migrations(json);
+  ASSERT_TRUE(migrated.find("\"version\"") != std::string::npos);
 
-    // 2. Already versioned
-    std::string json2 = "{\n  \"version\": 1,\n  \"name\": \"Test\"\n}";
-    std::string migrated2 = PresetManager::apply_migrations(json2);
-    ASSERT_EQ(json2, migrated2);
+  // 2. Already versioned
+  std::string json2 = "{\n  \"version\": 1,\n  \"name\": \"Test\"\n}";
+  std::string migrated2 = PresetManager::apply_migrations(json2);
+  ASSERT_EQ(json2, migrated2);
 
-    // 3. Invalid JSON string
-    std::string json3 = "this is not json";
-    std::string migrated3 = PresetManager::apply_migrations(json3);
-    ASSERT_EQ(json3, migrated3);
+  // 3. Invalid JSON string
+  std::string json3 = "this is not json";
+  std::string migrated3 = PresetManager::apply_migrations(json3);
+  ASSERT_EQ(json3, migrated3);
 
-    // 4. Empty JSON object
-    std::string json4 = "{}";
-    std::string migrated4 = PresetManager::apply_migrations(json4);
-    ASSERT_TRUE(migrated4.find("\"version\"") != std::string::npos);
+  // 4. Empty JSON object
+  std::string json4 = "{}";
+  std::string migrated4 = PresetManager::apply_migrations(json4);
+  ASSERT_TRUE(migrated4.find("\"version\"") != std::string::npos);
 }
 
 TEST(preset_manager_config_no_home) {
-    // Unset HOME
-    const char* old_home = std::getenv("HOME");
-    std::string home_str = old_home ? old_home : "";
+  // Unset HOME
+  const char *old_home = std::getenv("HOME");
+  std::string home_str = old_home ? old_home : "";
 #ifdef _WIN32
-    _putenv("APPDATA=");
+  _putenv("APPDATA=");
 #else
-    unsetenv("HOME");
+  unsetenv("HOME");
 #endif
 
-    PresetManager::save_config(); // This should save to amplitron_config.json
-    PresetManager::load_config(); // This should load from amplitron_config.json
+  PresetManager::save_config(); // This should save to amplitron_config.json
+  PresetManager::load_config(); // This should load from amplitron_config.json
 
 #ifdef _WIN32
-    if (!home_str.empty()) {
-        std::string env = "APPDATA=" + home_str;
-        _putenv(env.c_str());
-    }
+  if (!home_str.empty()) {
+    std::string env = "APPDATA=" + home_str;
+    _putenv(env.c_str());
+  }
 #else
-    if (!home_str.empty()) {
-        setenv("HOME", home_str.c_str(), 1);
-    }
+  if (!home_str.empty()) {
+    setenv("HOME", home_str.c_str(), 1);
+  }
 #endif
-    
-    // Clean up
-    std::remove("amplitron_config.json");
+
+  // Clean up
+  std::remove("amplitron_config.json");
 }
 
 TEST(preset_manager_get_presets_dir_no_home) {
-    PresetManager::set_presets_dir(""); // Clear custom
-    const char* old_home = std::getenv("HOME");
-    std::string home_str = old_home ? old_home : "";
+  PresetManager::set_presets_dir(""); // Clear custom
+  const char *old_home = std::getenv("HOME");
+  std::string home_str = old_home ? old_home : "";
 #ifdef _WIN32
-    _putenv("APPDATA=");
+  _putenv("APPDATA=");
 #else
-    unsetenv("HOME");
+  unsetenv("HOME");
 #endif
 
-    std::string dir = PresetManager::get_presets_dir();
-    ASSERT_EQ(dir, "presets");
+  std::string dir = PresetManager::get_presets_dir();
+  ASSERT_EQ(dir, "presets");
 
 #ifdef _WIN32
-    if (!home_str.empty()) {
-        std::string env = "APPDATA=" + home_str;
-        _putenv(env.c_str());
-    }
+  if (!home_str.empty()) {
+    std::string env = "APPDATA=" + home_str;
+    _putenv(env.c_str());
+  }
 #else
-    if (!home_str.empty()) {
-        setenv("HOME", home_str.c_str(), 1);
-    }
+  if (!home_str.empty()) {
+    setenv("HOME", home_str.c_str(), 1);
+  }
 #endif
 }
 
 TEST(preset_manager_save_config_failure) {
-    const char* old_home = std::getenv("HOME");
-    std::string home_str = old_home ? old_home : "";
+  const char *old_home = std::getenv("HOME");
+  std::string home_str = old_home ? old_home : "";
 #ifdef _WIN32
-    _putenv("APPDATA=");
+  _putenv("APPDATA=");
 #else
-    unsetenv("HOME");
+  unsetenv("HOME");
 #endif
-    
-    // Create a directory named amplitron_config.json to force ofstream to fail
-    std::filesystem::create_directories("amplitron_config.json");
-    
-    PresetManager::save_config(); // This should fail gracefully
-    
-    std::filesystem::remove("amplitron_config.json");
+
+  // Create a directory named amplitron_config.json to force ofstream to fail
+  std::filesystem::create_directories("amplitron_config.json");
+
+  PresetManager::save_config(); // This should fail gracefully
+
+  std::filesystem::remove("amplitron_config.json");
 #ifdef _WIN32
-    if (!home_str.empty()) {
-        std::string env = "APPDATA=" + home_str;
-        _putenv(env.c_str());
-    }
+  if (!home_str.empty()) {
+    std::string env = "APPDATA=" + home_str;
+    _putenv(env.c_str());
+  }
 #else
-    if (!home_str.empty()) {
-        setenv("HOME", home_str.c_str(), 1);
-    }
+  if (!home_str.empty()) {
+    setenv("HOME", home_str.c_str(), 1);
+  }
 #endif
 }
 
 TEST(preset_manager_append_json_files_exception) {
-    // Try to append files from a file path instead of a directory
-    // This will cause std::filesystem::directory_iterator to throw
-    std::ofstream f("test_fake_dir.txt");
-    f << "test";
-    f.close();
-    
-    std::vector<std::string> results;
-    Amplitron::append_json_files("test_fake_dir.txt", results);
-    ASSERT_EQ(results.size(), 0u);
-    
-    std::remove("test_fake_dir.txt");
+  // Try to append files from a file path instead of a directory
+  // This will cause std::filesystem::directory_iterator to throw
+  std::ofstream f("test_fake_dir.txt");
+  f << "test";
+  f.close();
+
+  std::vector<std::string> results;
+  Amplitron::append_json_files("test_fake_dir.txt", results);
+  ASSERT_EQ(results.size(), 0u);
+
+  std::remove("test_fake_dir.txt");
 }
 
 TEST(preset_manager_save_factory_presets_write_failure) {
-    std::string test_dir = "presets_readonly_test";
-    std::filesystem::create_directories(test_dir);
-    
-    // Create a dummy file in presets to act as bundled
-    std::filesystem::create_directories("presets");
-    std::ofstream f("presets/dummy_factory.json");
-    f << "{}";
-    f.close();
-    
-    // Make directory read-only
+  std::string test_dir = "presets_readonly_test";
+  std::filesystem::create_directories(test_dir);
+
+  // Create a dummy file in presets to act as bundled
+  std::filesystem::create_directories("presets");
+  std::ofstream f("presets/dummy_factory.json");
+  f << "{}";
+  f.close();
+
+  // Make directory read-only
 #ifndef _WIN32
-    chmod(test_dir.c_str(), 0555);
+  chmod(test_dir.c_str(), 0555);
 #endif
 
-    // This should attempt to copy factory presets to test_dir but fail on write
-    PresetManager::set_presets_dir(test_dir);
+  // This should attempt to copy factory presets to test_dir but fail on write
+  PresetManager::set_presets_dir(test_dir);
 
-    // Cleanup
+  // Cleanup
 #ifndef _WIN32
-    chmod(test_dir.c_str(), 0777);
+  chmod(test_dir.c_str(), 0777);
 #endif
-    std::filesystem::remove_all(test_dir);
-    std::filesystem::remove("presets/dummy_factory.json");
+  std::filesystem::remove_all(test_dir);
+  std::filesystem::remove("presets/dummy_factory.json");
 }
 
 TEST(preset_load_linear_legacy_conversion) {
-    std::string json = R"({
+  std::string json = R"({
         "format_version": 1,
         "routing": "linear",
         "name": "Legacy",
@@ -896,45 +897,45 @@ TEST(preset_load_linear_legacy_conversion) {
             {"type": "UnknownEffect", "enabled": true, "mix": 1.0, "params": {}}
         ]
     })";
-    std::string path = "presets/legacy_conversion_test.json";
-    std::ofstream f(path);
-    f << json;
-    f.close();
+  std::string path = "presets/legacy_conversion_test.json";
+  std::ofstream f(path);
+  f << json;
+  f.close();
 
-    AudioEngine engine;
-    engine.initialize();
-    bool loaded = PresetManager::load_preset(path, engine);
-    ASSERT_TRUE(loaded);
+  AudioEngine engine;
+  engine.initialize();
+  bool loaded = PresetManager::load_preset(path, engine);
+  ASSERT_TRUE(loaded);
 
-    std::remove(path.c_str());
-    engine.shutdown();
+  std::remove(path.c_str());
+  engine.shutdown();
 }
 
 TEST(preset_save_all_effect_types) {
-    AudioEngine engine;
-    engine.initialize();
+  AudioEngine engine;
+  engine.initialize();
 
-    engine.clear_effects();
-    
-    auto comp = std::make_shared<Compressor>();
-    auto eq = std::make_shared<Equalizer>();
-    auto gate = std::make_shared<NoiseGate>();
-    auto drive = std::make_shared<Overdrive>();
-    auto reverb = std::make_shared<Reverb>();
+  engine.clear_effects();
 
-    engine.add_initial_effects({comp, eq, gate, drive, reverb});
+  auto comp = std::make_shared<Compressor>();
+  auto eq = std::make_shared<Equalizer>();
+  auto gate = std::make_shared<NoiseGate>();
+  auto drive = std::make_shared<Overdrive>();
+  auto reverb = std::make_shared<Reverb>();
 
-    std::string path = "presets/all_effects.json";
-    bool saved = PresetManager::save_preset(path, "All FX", "Test", engine);
-    ASSERT_TRUE(saved);
+  engine.add_initial_effects({comp, eq, gate, drive, reverb});
 
-    std::remove(path.c_str());
-    engine.shutdown();
+  std::string path = "presets/all_effects.json";
+  bool saved = PresetManager::save_preset(path, "All FX", "Test", engine);
+  ASSERT_TRUE(saved);
+
+  std::remove(path.c_str());
+  engine.shutdown();
 }
 
 TEST(preset_graph_from_json_add_link_failure) {
-    // 1. Link parsing errors: reusing the same output pin which is illegal
-    std::string json1 = R"({
+  // 1. Link parsing errors: reusing the same output pin which is illegal
+  std::string json1 = R"({
         "format_version": 2,
         "routing": "graph",
         "name": "Cycle",
@@ -948,21 +949,99 @@ TEST(preset_graph_from_json_add_link_failure) {
             {"src_pin": "n1.out0", "dst_pin": "n3.in0"}
         ]
     })";
-    
-    AudioGraph graph1;
-    bool loaded1 = PresetManager::graph_from_json(json1, graph1);
-    ASSERT_FALSE(loaded1);
+
+  AudioGraph graph1;
+  bool loaded1 = PresetManager::graph_from_json(json1, graph1);
+  ASSERT_FALSE(loaded1);
 }
 
 TEST(preset_save_preset_invalid_path) {
-    AudioEngine engine;
-    engine.initialize();
-    bool saved = PresetManager::save_preset("/invalid_path_that_does_not_exist/preset.json", "Name", "Desc", engine);
-    ASSERT_FALSE(saved);
-    engine.shutdown();
+  AudioEngine engine;
+  engine.initialize();
+  bool saved = PresetManager::save_preset(
+      "/invalid_path_that_does_not_exist/preset.json", "Name", "Desc", engine);
+  ASSERT_FALSE(saved);
+  engine.shutdown();
 }
 
+TEST(preset_manager_config_parsing_edge_cases) {
+  const char *old_home = std::getenv("HOME");
+  std::string home_str = old_home ? old_home : "";
+  std::string test_home = "test_home_config";
+  std::filesystem::create_directories(test_home + "/.config/amplitron");
+#ifdef _WIN32
+  _putenv(("APPDATA=" + test_home).c_str());
+#else
+  setenv("HOME", test_home.c_str(), 1);
+#endif
 
+  auto write_and_load = [&](const std::string &content) {
+    std::ofstream f(test_home + "/.config/amplitron/config.json");
+    f << content;
+    f.close();
+    PresetManager::load_config();
+  };
 
+  // 1. Missing colon
+  write_and_load("{\"presets_dir\" \"value\"}");
+  // 2. Missing quote
+  write_and_load("{\"presets_dir\": value}");
+  // 3. Escaped values
+  std::string test_dir = "test_dir_escapes\n\"\\";
+  std::filesystem::create_directories(test_dir);
+  // Write escaped JSON manually
+  write_and_load("{\"presets_dir\": \"test_dir_escapes\\n\\\"\\\\\"}");
 
+  // 4. Unknown escape sequence
+  write_and_load("{\"presets_dir\": \"test_dir_escapes\\x\"}");
 
+  // Cleanup
+#ifdef _WIN32
+  if (!home_str.empty())
+    _putenv(("APPDATA=" + home_str).c_str());
+  else
+    _putenv("APPDATA=");
+#else
+  if (!home_str.empty())
+    setenv("HOME", home_str.c_str(), 1);
+  else
+    unsetenv("HOME");
+#endif
+  std::filesystem::remove_all(test_home);
+  std::filesystem::remove_all(test_dir);
+}
+
+TEST(preset_load_preset_data_permission_denied) {
+  std::string path = "presets/unreadable.json";
+  std::ofstream f(path);
+  f << "{}";
+  f.close();
+#ifndef _WIN32
+  chmod(path.c_str(), 0000); // Unreadable
+#endif
+
+  AudioEngine engine;
+  bool loaded = PresetManager::load_preset(path, engine);
+  ASSERT_FALSE(loaded);
+
+#ifndef _WIN32
+  chmod(path.c_str(), 0644);
+#endif
+  std::remove(path.c_str());
+}
+
+TEST(preset_save_graph_all_fields) {
+  AudioEngine engine;
+  engine.initialize();
+
+  auto comp = std::make_shared<Compressor>();
+  engine.graph().add_node("Comp", NodeRoutingType::StandardEffect, comp, 2);
+  // Also add an effect that allows mixing parameter serialization test
+
+  std::string path = "presets/graph_all_fields.json";
+  bool saved = PresetManager::save_preset(path, "Graph", "Desc", engine);
+  ASSERT_TRUE(saved);
+
+  std::remove(path.c_str());
+  engine.shutdown();
+}
