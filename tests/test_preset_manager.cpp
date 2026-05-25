@@ -1046,12 +1046,47 @@ TEST(preset_save_graph_all_fields) {
 
   auto comp = std::make_shared<Compressor>();
   engine.graph().add_node("Comp", NodeRoutingType::StandardEffect, comp, 2);
-  // Also add an effect that allows mixing parameter serialization test
+
+  auto cab = std::make_shared<CabinetSim>();
+  
+  // Create a minimal 46-byte valid WAV file with 1 sample to satisfy load_ir
+  const char wav_header[46] = {
+      'R','I','F','F', 38, 0, 0, 0, 'W','A','V','E',
+      'f','m','t',' ', 16, 0, 0, 0, 1, 0, 1, 0,
+      (char)0x80, (char)0xbb, 0, 0, 0, (char)0x77, 1, 0, 2, 0, 16, 0,
+      'd','a','t','a', 2, 0, 0, 0,
+      0, 0
+  };
+  std::ofstream out("test_ir.wav", std::ios::binary);
+  out.write(wav_header, 46);
+  out.close();
+
+  bool ir_loaded = cab->load_ir("test_ir.wav"); // populates metadata
+  ASSERT_TRUE(ir_loaded);
+  engine.graph().add_node("Cab", NodeRoutingType::StandardEffect, cab, 1);
 
   std::string path = "presets/graph_all_fields.json";
   bool saved = PresetManager::save_preset(path, "Graph", "Desc", engine);
   ASSERT_TRUE(saved);
 
+  // Roundtrip to test from_ordered_json's metadata processing
+  AudioEngine engine2;
+  engine2.initialize();
+  bool loaded = PresetManager::load_preset(path, engine2);
+  ASSERT_TRUE(loaded);
+  
+  // Verify metadata loaded
+  const auto& graph = engine2.graph();
+  bool found_metadata = false;
+  for (const auto& node : graph.get_nodes()) {
+      if (auto cab_sim = std::dynamic_pointer_cast<CabinetSim>(node.pedal)) {
+          if (cab_sim->ir_path() == "test_ir.wav") found_metadata = true;
+      }
+  }
+  ASSERT_TRUE(found_metadata);
+
   std::remove(path.c_str());
+  std::remove("test_ir.wav");
   engine.shutdown();
+  engine2.shutdown();
 }
