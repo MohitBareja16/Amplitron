@@ -153,25 +153,27 @@ public:
         auto out_devs = engine.get_output_devices();
         
         if (!in_devs.empty() && !out_devs.empty()) {
-            engine.start();
+            if (engine.start()) {
+                // Sabotage the engine so that the next start() fails!
+                engine.initialized_ = false;
+                
+                // Try to set input device. It will stop, set, and then try to start() again.
+                // start() will immediately return false because initialized_ is false.
+                // It will then hit the revert logic and fail to revert too (since initialized_ is still false).
+                bool in_ok = engine.set_input_device(in_devs[0].index);
+                ASSERT_FALSE(in_ok);
+                
+                engine.initialized_ = true;
+            }
             
-            // Sabotage the engine so that the next start() fails!
-            engine.initialized_ = false;
-            
-            // Try to set input device. It will stop, set, and then try to start() again.
-            // start() will immediately return false because initialized_ is false.
-            // It will then hit the revert logic and fail to revert too (since initialized_ is still false).
-            bool in_ok = engine.set_input_device(in_devs[0].index);
-            ASSERT_FALSE(in_ok);
-            
-            engine.initialized_ = true;
-            engine.start();
-            engine.initialized_ = false;
-            
-            bool out_ok = engine.set_output_device(out_devs[0].index);
-            ASSERT_FALSE(out_ok);
-            
-            engine.initialized_ = true; // Restore for clean shutdown
+            if (engine.start()) {
+                engine.initialized_ = false;
+                
+                bool out_ok = engine.set_output_device(out_devs[0].index);
+                ASSERT_FALSE(out_ok);
+                
+                engine.initialized_ = true; // Restore for clean shutdown
+            }
         }
     }
 };
