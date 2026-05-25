@@ -18,6 +18,8 @@
 #include "preset_json.h"
 #include "preset_manager.h"
 #include "audio/audio_engine.h"
+#include <stdexcept>
+
 #include "audio/effects/noise_gate.h"
 #include "audio/effects/overdrive.h"
 #include "audio/effects/equalizer.h"
@@ -637,5 +639,85 @@ TEST(json_from_ordered_json_effect_invalid_types_skipped) {
     ASSERT_EQ(p.effects[0].params.size(), 1u);
     ASSERT_EQ(p.effects[0].metadata.size(), 1u);
 }
+
+TEST(json_to_json_linear_routing) {
+    PresetData p;
+    p.routing = "linear";
+    p.effects.push_back({"Delay", true, 0.5f, {{"Time", 0.5f}}, {}});
+    
+    nlohmann::json j = p; // Uses to_json ADL hook
+    ASSERT_TRUE(j.contains("effects"));
+    ASSERT_EQ(j["effects"].size(), 1u);
+    ASSERT_EQ(j["effects"][0]["type"], "Delay");
+}
+
+TEST(json_from_json_skips_empty_type) {
+    nlohmann::json j = nlohmann::json::parse(R"({
+        "routing": "linear",
+        "effects": [
+            { "type": "" },
+            { "type": "Valid" }
+        ],
+        "nodes": [
+            { "id": "n1", "type": "" },
+            { "id": "", "type": "Valid" },
+            { "id": "n3", "type": "Valid" }
+        ],
+        "links": [
+            { "src_pin": "", "dst_pin": "n2.in" },
+            { "src_pin": "n1.out", "dst_pin": "" },
+            { "src_pin": "n1.out", "dst_pin": "n2.in" }
+        ]
+    })");
+    PresetData p;
+    from_json(j, p);
+    
+    ASSERT_EQ(p.effects.size(), 1u);
+    ASSERT_EQ(p.effects[0].type, "Valid");
+    ASSERT_EQ(p.nodes.size(), 1u);
+    ASSERT_EQ(p.nodes[0].id, "n3");
+    ASSERT_EQ(p.links.size(), 1u);
+}
+
+TEST(json_from_ordered_json_skips_empty_type) {
+    PresetData p;
+    bool ok = from_json_ext(R"({
+        "format_version": 2,
+        "routing": "linear",
+        "effects": [
+            { "type": "" },
+            { "type": "Valid" }
+        ],
+        "nodes": [
+            { "id": "n1", "type": "" },
+            { "id": "", "type": "Valid" },
+            { "id": "n3", "type": "Valid" }
+        ],
+        "links": [
+            { "src_pin": "", "dst_pin": "n2.in" },
+            { "src_pin": "n1.out", "dst_pin": "" },
+            { "src_pin": "n1.out", "dst_pin": "n2.in" }
+        ]
+    })", p);
+    
+    ASSERT_TRUE(ok);
+    ASSERT_EQ(p.effects.size(), 1u);
+    ASSERT_EQ(p.nodes.size(), 1u);
+    ASSERT_EQ(p.links.size(), 1u);
+}
+
+TEST(json_from_json_missing_nodes_throws) {
+    nlohmann::json j = nlohmann::json::parse(R"({"routing": "graph"})");
+    PresetData p;
+    ASSERT_THROW(from_json(j, p), std::invalid_argument);
+}
+
+TEST(json_from_json_missing_links_throws) {
+    nlohmann::json j = nlohmann::json::parse(R"({"routing": "graph", "nodes": []})");
+    PresetData p;
+    ASSERT_THROW(from_json(j, p), std::invalid_argument);
+}
+
+
 
 

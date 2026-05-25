@@ -886,5 +886,83 @@ TEST(preset_manager_save_factory_presets_write_failure) {
     std::filesystem::remove("presets/dummy_factory.json");
 }
 
+TEST(preset_load_linear_legacy_conversion) {
+    std::string json = R"({
+        "format_version": 1,
+        "routing": "linear",
+        "name": "Legacy",
+        "effects": [
+            {"type": "IR Cabinet", "enabled": true, "mix": 1.0, "params": {}},
+            {"type": "UnknownEffect", "enabled": true, "mix": 1.0, "params": {}}
+        ]
+    })";
+    std::string path = "presets/legacy_conversion_test.json";
+    std::ofstream f(path);
+    f << json;
+    f.close();
+
+    AudioEngine engine;
+    engine.initialize();
+    bool loaded = PresetManager::load_preset(path, engine);
+    ASSERT_TRUE(loaded);
+
+    std::remove(path.c_str());
+    engine.shutdown();
+}
+
+TEST(preset_save_all_effect_types) {
+    AudioEngine engine;
+    engine.initialize();
+
+    engine.clear_effects();
+    
+    auto comp = std::make_shared<Compressor>();
+    auto eq = std::make_shared<Equalizer>();
+    auto gate = std::make_shared<NoiseGate>();
+    auto drive = std::make_shared<Overdrive>();
+    auto reverb = std::make_shared<Reverb>();
+
+    engine.add_initial_effects({comp, eq, gate, drive, reverb});
+
+    std::string path = "presets/all_effects.json";
+    bool saved = PresetManager::save_preset(path, "All FX", "Test", engine);
+    ASSERT_TRUE(saved);
+
+    std::remove(path.c_str());
+    engine.shutdown();
+}
+
+TEST(preset_graph_from_json_add_link_failure) {
+    // 1. Link parsing errors: reusing the same output pin which is illegal
+    std::string json1 = R"({
+        "format_version": 2,
+        "routing": "graph",
+        "name": "Cycle",
+        "nodes": [
+            {"id": "n1", "type": "Input", "enabled": true, "mix": 1.0, "params": []},
+            {"id": "n2", "type": "Output", "enabled": true, "mix": 1.0, "params": []},
+            {"id": "n3", "type": "Delay", "enabled": true, "mix": 1.0, "params": []}
+        ],
+        "links": [
+            {"src_pin": "n1.out0", "dst_pin": "n2.in0"},
+            {"src_pin": "n1.out0", "dst_pin": "n3.in0"}
+        ]
+    })";
+    
+    AudioGraph graph1;
+    bool loaded1 = PresetManager::graph_from_json(json1, graph1);
+    ASSERT_FALSE(loaded1);
+}
+
+TEST(preset_save_preset_invalid_path) {
+    AudioEngine engine;
+    engine.initialize();
+    bool saved = PresetManager::save_preset("/invalid_path_that_does_not_exist/preset.json", "Name", "Desc", engine);
+    ASSERT_FALSE(saved);
+    engine.shutdown();
+}
+
+
+
 
 
