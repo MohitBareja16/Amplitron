@@ -74,3 +74,9 @@ build-ios/
 *.xcworkspace/
 xcuserdata/
 emsdk/
+
+# Coverage
+*.gcda
+*.gcno
+*.info
+*_html_report/
