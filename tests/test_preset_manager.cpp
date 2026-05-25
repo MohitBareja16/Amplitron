@@ -988,7 +988,10 @@ TEST(preset_manager_config_parsing_edge_cases) {
   write_and_load("{\"presets_dir\": value}");
   // 3. Escaped values
   std::string test_dir = "test_dir_escapes\n\"\\";
-  std::filesystem::create_directories(test_dir);
+  // We don't actually create this directory on disk because Windows
+  // physically rejects these characters and throws an exception.
+  // The parser will still successfully hit the coverage branches!
+  
   // Write escaped JSON manually
   write_and_load("{\"presets_dir\": \"test_dir_escapes\\n\\\"\\\\\"}");
 
@@ -1008,15 +1011,20 @@ TEST(preset_manager_config_parsing_edge_cases) {
     unsetenv("HOME");
 #endif
   std::filesystem::remove_all(test_home);
-  std::filesystem::remove_all(test_dir);
 }
 
 TEST(preset_load_preset_data_permission_denied) {
-  std::string path = "presets/unreadable.json";
+#ifdef _WIN32
+  // On Windows, opening a directory with ifstream fails, which correctly 
+  // triggers the !file.is_open() branch. (Linux ifstream opens directories but throws on read).
+  std::string path = "presets_unreadable_dir_test";
+  std::filesystem::create_directories(path);
+#else
+  // On Linux, we create a file and strip its read permissions.
+  std::string path = "presets_unreadable_file_test.json";
   std::ofstream f(path);
   f << "{}";
   f.close();
-#ifndef _WIN32
   chmod(path.c_str(), 0000); // Unreadable
 #endif
 
@@ -1024,10 +1032,12 @@ TEST(preset_load_preset_data_permission_denied) {
   bool loaded = PresetManager::load_preset(path, engine);
   ASSERT_FALSE(loaded);
 
-#ifndef _WIN32
+#ifdef _WIN32
+  std::filesystem::remove(path);
+#else
   chmod(path.c_str(), 0644);
-#endif
   std::remove(path.c_str());
+#endif
 }
 
 TEST(preset_save_graph_all_fields) {
