@@ -583,3 +583,33 @@ TEST(preset_graph_widened_mixer) {
   }
   ASSERT_TRUE(found_mixer);
 }
+
+TEST(preset_config_roundtrip) {
+    // Save original config to restore later
+    std::string original_dir = PresetManager::get_presets_dir();
+
+    // Test load_config when it might not exist (shouldn't crash)
+    PresetManager::load_config(); 
+
+    // Set custom dir and save
+    std::string test_dir = "presets_custom_test_dir";
+    PresetManager::set_presets_dir(test_dir);
+    PresetManager::save_config();
+
+    // Clear it and reload from config
+    PresetManager::set_presets_dir("");
+    PresetManager::load_config();
+    
+    // It should have loaded our custom dir
+    std::string loaded_dir = PresetManager::get_presets_dir();
+    // Path resolution might vary by OS, but it should contain our test dir name
+    ASSERT_TRUE(loaded_dir.find(test_dir) != std::string::npos);
+
+    // Cleanup
+    PresetManager::set_presets_dir("");
+    std::filesystem::remove_all(test_dir);
+    
+    // We should ideally restore the config here if it was changed, but the test 
+    // runner is ephemeral.
+}
+

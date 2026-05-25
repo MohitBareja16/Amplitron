@@ -408,3 +408,85 @@ TEST(json_audio_engine_autosave_roundtrip) {
     
     engine.shutdown();
 }
+
+TEST(json_graph_node_and_link_roundtrip) {
+    PresetData preset;
+    preset.routing = "graph";
+    
+    PresetData::NodeData n;
+    n.id = "n1";
+    n.type = "Overdrive";
+    n.enabled = true;
+    n.mix = 0.5f;
+    n.num_inputs = 2;
+    n.x = 10.0f;
+    n.y = 20.0f;
+    n.params.push_back({"Drive", 1.0f});
+    n.metadata["test"] = "meta";
+    preset.nodes.push_back(n);
+
+    PresetData::LinkData l;
+    l.src_pin = "p1";
+    l.dst_pin = "p2";
+    preset.links.push_back(l);
+
+    std::string json_str = to_json_ext(preset);
+    
+    PresetData restored;
+    bool ok = from_json_ext(json_str, restored);
+    ASSERT_TRUE(ok);
+    
+    ASSERT_EQ(restored.nodes.size(), 1u);
+    ASSERT_EQ(restored.nodes[0].id, "n1");
+    ASSERT_EQ(restored.nodes[0].type, "Overdrive");
+    ASSERT_TRUE(restored.nodes[0].enabled);
+    ASSERT_EQ(restored.nodes[0].mix, 0.5f);
+    ASSERT_EQ(restored.nodes[0].num_inputs, 2);
+    ASSERT_EQ(restored.nodes[0].x, 10.0f);
+    ASSERT_EQ(restored.nodes[0].y, 20.0f);
+    ASSERT_EQ(restored.nodes[0].params.size(), 1u);
+    ASSERT_EQ(restored.nodes[0].metadata["test"], "meta");
+
+    ASSERT_EQ(restored.links.size(), 1u);
+    ASSERT_EQ(restored.links[0].src_pin, "p1");
+    ASSERT_EQ(restored.links[0].dst_pin, "p2");
+}
+
+TEST(json_from_json_ext_exceptions) {
+    PresetData p;
+    // Missing nodes
+    bool ok1 = from_json_ext(R"({"routing": "graph", "links": []})", p);
+    ASSERT_FALSE(ok1);
+    
+    // Missing links
+    bool ok2 = from_json_ext(R"({"routing": "graph", "nodes": []})", p);
+    ASSERT_FALSE(ok2);
+}
+
+TEST(json_from_json_exceptions) {
+    nlohmann::json j1 = {
+        {"routing", "graph"},
+        {"links", nlohmann::json::array()}
+    };
+    PresetData p1;
+    bool caught1 = false;
+    try {
+        from_json(j1, p1);
+    } catch(const std::invalid_argument&) {
+        caught1 = true;
+    }
+    ASSERT_TRUE(caught1);
+
+    nlohmann::json j2 = {
+        {"routing", "graph"},
+        {"nodes", nlohmann::json::array()}
+    };
+    PresetData p2;
+    bool caught2 = false;
+    try {
+        from_json(j2, p2);
+    } catch(const std::invalid_argument&) {
+        caught2 = true;
+    }
+    ASSERT_TRUE(caught2);
+}

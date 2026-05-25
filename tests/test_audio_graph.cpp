@@ -469,3 +469,70 @@ TEST(graph_preset_missing_node_handled_gracefully) {
   AudioGraph loaded;
   ASSERT_FALSE(mock_load_graph(j.dump(), loaded));
 }
+
+TEST(audio_graph_link_enforcement) {
+  AudioGraph graph;
+  int n1 = graph.add_node("A", NodeRoutingType::StandardEffect);
+  int n2 = graph.add_node("B", NodeRoutingType::StandardEffect);
+  int n3 = graph.add_node("C", NodeRoutingType::StandardEffect);
+  
+  auto nodes = graph.get_nodes();
+  int l1 = graph.add_link(nodes[0].output_pin_ids[0], nodes[1].input_pin_ids[0]);
+  ASSERT_TRUE(l1 != -1);
+  
+  // Duplicate link -> returns existing ID
+  int l2 = graph.add_link(nodes[0].output_pin_ids[0], nodes[1].input_pin_ids[0]);
+  ASSERT_TRUE(l2 == l1);
+  
+  // Same output, different input -> fails (output already in use)
+  int l3 = graph.add_link(nodes[0].output_pin_ids[0], nodes[2].input_pin_ids[0]);
+  ASSERT_TRUE(l3 == -1);
+  
+  // Same input, different output -> fails (input already in use)
+  int l4 = graph.add_link(nodes[2].output_pin_ids[0], nodes[1].input_pin_ids[0]);
+  ASSERT_TRUE(l4 == -1);
+}
+
+TEST(audio_graph_remove_node_and_link) {
+  AudioGraph graph;
+  int n1 = graph.add_node("A", NodeRoutingType::StandardEffect);
+  int n2 = graph.add_node("B", NodeRoutingType::StandardEffect);
+  int n3 = graph.add_node("C", NodeRoutingType::StandardEffect);
+  
+  auto nodes = graph.get_nodes();
+  int l1 = graph.add_link(nodes[0].output_pin_ids[0], nodes[1].input_pin_ids[0]);
+  int l2 = graph.add_link(nodes[1].output_pin_ids[0], nodes[2].input_pin_ids[0]);
+  
+  // Remove non-existent node
+  ASSERT_FALSE(graph.remove_node(999));
+  
+  // Remove non-existent link
+  ASSERT_FALSE(graph.remove_link(999));
+  
+  // Remove link
+  ASSERT_TRUE(graph.remove_link(l1));
+  ASSERT_TRUE(graph.get_links().size() == 1);
+  
+  // Remove node
+  ASSERT_TRUE(graph.remove_node(n2));
+  ASSERT_TRUE(graph.get_nodes().size() == 2);
+  ASSERT_TRUE(graph.get_links().size() == 0); // Link connected to n2 should be removed
+}
+
+TEST(audio_graph_mixer_inputs) {
+  AudioGraph graph;
+  // Test num_inputs > 0 case
+  int n1 = graph.add_node("Mixer", NodeRoutingType::Mixer, nullptr, 4);
+  auto nodes = graph.get_nodes();
+  ASSERT_TRUE(nodes[0].input_pin_ids.size() == 4);
+}
+
+TEST(audio_graph_find_node_invalid) {
+  AudioGraph graph;
+  ASSERT_TRUE(graph.find_node(999) == nullptr);
+}
+
+TEST(audio_graph_get_node_from_pin_invalid) {
+  AudioGraph graph;
+  ASSERT_TRUE(graph.get_node_from_pin(999) == -1);
+}
