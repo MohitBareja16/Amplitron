@@ -504,28 +504,7 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
 
     # --- Test Target ---
     set(TEST_SOURCES
-        tests/test_main.cpp
-        tests/test_common.cpp
-        tests/test_oboe_ring_buffer.cpp
-        tests/test_effects.cpp
-        tests/test_looper.cpp
-        tests/test_preset_manager.cpp
-        tests/test_json_serialization.cpp
-        tests/test_recorder.cpp
-        tests/test_theme.cpp
-        tests/test_command_history.cpp
-        tests/test_snapshot_manager.cpp
-        tests/test_cabinet_sim_ir.cpp
-	tests/test_wav_loader.cpp
-	tests/test_convolution_engine.cpp
-        tests/test_midi_manager.cpp
-        tests/test_unsaved_preset.cpp
-        tests/test_audio_graph.cpp
-        tests/test_metronome.cpp
-        tests/test_gui_manager.cpp
-        tests/test_clipboard_preset.cpp
         tests/test_audio_backend_portaudio.cpp
-        tests/test_audio_engine.cpp
         tests/unit/test_common.cpp
         tests/unit/test_oboe_ring_buffer.cpp
         tests/unit/test_effects_dynamics.cpp
@@ -670,6 +649,9 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
     # ============================================================
     target_compile_definitions(amplitron-tests PRIVATE 
         AMPLITRON_HAS_MIDI
+        AMPLITRON_VERSION="${AMPLITRON_VERSION}"
+        AMPLITRON_HEADLESS
+        SDL_MAIN_HANDLED
         "Pa_GetDeviceCount=MOCK_Pa_GetDeviceCount"
         "Pa_GetDeviceInfo=MOCK_Pa_GetDeviceInfo"
         "Pa_GetHostApiInfo=MOCK_Pa_GetHostApiInfo"
@@ -683,11 +665,6 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
         "Pa_CloseStream=MOCK_Pa_CloseStream"
         "Pa_GetStreamInfo=MOCK_Pa_GetStreamInfo"
         "Pa_Initialize=MOCK_Pa_Initialize"
-    target_compile_definitions(amplitron-tests PRIVATE
-        AMPLITRON_HAS_MIDI
-        AMPLITRON_VERSION="${AMPLITRON_VERSION}"
-        AMPLITRON_HEADLESS
-        SDL_MAIN_HANDLED
     )
 
     target_link_libraries(amplitron-tests PRIVATE
