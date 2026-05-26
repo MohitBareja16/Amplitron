@@ -505,7 +505,6 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
     # --- Test Target ---
     set(TEST_SOURCES
         tests/test_main.cpp
-        tests/test_audio_backend_portaudio.cpp
         tests/unit/test_common.cpp
         tests/unit/test_oboe_ring_buffer.cpp
         tests/unit/test_effects_dynamics.cpp
@@ -531,6 +530,7 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
         tests/integration/test_metronome.cpp
         tests/integration/test_clipboard_preset.cpp
         tests/integration/test_audio_engine.cpp
+        tests/integration/test_audio_backend_portaudio.cpp
         tests/e2e/test_e2e_preset_workflow.cpp
         tests/ui/test_gui_manager.cpp
         tests/ui/test_pedal_board.cpp
