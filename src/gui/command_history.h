@@ -16,7 +16,7 @@ namespace Amplitron {
 class CommandHistory {
 public:
     /** @brief Default maximum number of undo entries. */
-    static constexpr int DEFAULT_MAX_DEPTH = 50;
+    static constexpr int DEFAULT_MAX_DEPTH = 100;
 
     /**
      * @brief Construct a CommandHistory.

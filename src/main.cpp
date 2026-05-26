@@ -4,6 +4,8 @@
 #include "gui/gui_graph_state.h"
 #include "preset_manager.h"
 #include "cli.h"
+#include "gui/command_graph.h"
+#include "gui/command_history.h"
 
 #include "audio/effects/noise_gate.h"
 #include "audio/effects/compressor.h"
@@ -143,18 +145,19 @@ extern "C" EMSCRIPTEN_KEEPALIVE bool has_node_of_type(int routing_type) {
 
 extern "C" EMSCRIPTEN_KEEPALIVE int trigger_add_splitter_node() {
     if (!g_gui) return -1;
-    auto& graph = g_gui->audio_engine().graph();
-    int id = graph.add_node("Splitter", Amplitron::NodeRoutingType::Splitter);
-    g_gui->audio_engine().commit_graph_changes();
-    return id;
+    auto cmd = std::make_unique<Amplitron::AddGraphNodeCommand>(
+        g_gui->audio_engine(), "Splitter", Amplitron::NodeRoutingType::Splitter, nullptr, ImVec2(40, 60));
+    int id = cmd->node_id; // id assigned during execute, wait, we need to get it AFTER execution!
+    g_gui->command_history().execute(std::move(cmd));
+    return g_gui->audio_engine().graph().get_nodes().back().id; // roughly
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE int trigger_add_link(int src_pin, int dst_pin) {
     if (!g_gui) return -1;
-    auto& graph = g_gui->audio_engine().graph();
-    int id = graph.add_link(src_pin, dst_pin);
-    g_gui->audio_engine().commit_graph_changes();
-    return id;
+    g_gui->command_history().execute(
+        std::make_unique<Amplitron::AddGraphLinkCommand>(g_gui->audio_engine(), src_pin, dst_pin)
+    );
+    return g_gui->audio_engine().graph().get_links().back().id; // roughly
 }
 
 extern "C" EMSCRIPTEN_KEEPALIVE int get_node_output_pin_by_index(int node_index, int pin_index) {
@@ -183,12 +186,14 @@ extern "C" EMSCRIPTEN_KEEPALIVE bool trigger_delete_last_node() {
     for (int i = static_cast<int>(nodes.size()) - 1; i >= 0; --i) {
         const auto& node = nodes[i];
         if (node.name == "Input" || node.name == "Amp Sim") continue;
-        bool ok = graph.remove_node(node.id);
-        if (ok) {
-            Amplitron::GuiGraphState::get_instance().node_positions.erase(node.id);
-            g_gui->audio_engine().commit_graph_changes();
-        }
-        return ok;
+        
+        g_gui->command_history().execute(
+            std::make_unique<Amplitron::RemoveGraphNodeCommand>(
+                g_gui->audio_engine(), node.id, node.routing_type, ImVec2(0, 0)
+            )
+        );
+        Amplitron::GuiGraphState::get_instance().node_positions.erase(node.id);
+        return true;
     }
     return false; // No deletable node found
 }

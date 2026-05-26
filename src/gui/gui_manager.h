@@ -47,6 +47,7 @@ public:
 
     MidiManager& midi_manager() { return midi_manager_; }
     AudioEngine& audio_engine() { return engine_; }
+    CommandHistory& command_history() { return command_history_; }
 
 private:
     void render_menu_bar();

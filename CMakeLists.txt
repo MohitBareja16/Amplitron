@@ -510,6 +510,7 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
         tests/test_recorder.cpp
         tests/test_theme.cpp
         tests/test_command_history.cpp
+        tests/test_command_graph.cpp
         tests/test_snapshot_manager.cpp
         tests/test_cabinet_sim_ir.cpp
 	tests/test_wav_loader.cpp
