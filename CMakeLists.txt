@@ -504,6 +504,7 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
 
     # --- Test Target ---
     set(TEST_SOURCES
+        tests/test_main.cpp
         tests/test_audio_backend_portaudio.cpp
         tests/unit/test_common.cpp
         tests/unit/test_oboe_ring_buffer.cpp
