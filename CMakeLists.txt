@@ -591,7 +591,22 @@ else() # NOT EMSCRIPTEN, ANDROID, or IOS
     # ============================================================
     # DEFINE AMPLITRON_HAS_MIDI FOR TEST BUILDS
     # ============================================================
-    target_compile_definitions(amplitron-tests PRIVATE AMPLITRON_HAS_MIDI)
+    target_compile_definitions(amplitron-tests PRIVATE 
+        AMPLITRON_HAS_MIDI
+        "Pa_GetDeviceCount=MOCK_Pa_GetDeviceCount"
+        "Pa_GetDeviceInfo=MOCK_Pa_GetDeviceInfo"
+        "Pa_GetHostApiInfo=MOCK_Pa_GetHostApiInfo"
+        "Pa_GetHostApiCount=MOCK_Pa_GetHostApiCount"
+        "Pa_HostApiDeviceIndexToDeviceIndex=MOCK_Pa_HostApiDeviceIndexToDeviceIndex"
+        "Pa_GetDefaultInputDevice=MOCK_Pa_GetDefaultInputDevice"
+        "Pa_GetDefaultOutputDevice=MOCK_Pa_GetDefaultOutputDevice"
+        "Pa_OpenStream=MOCK_Pa_OpenStream"
+        "Pa_StartStream=MOCK_Pa_StartStream"
+        "Pa_StopStream=MOCK_Pa_StopStream"
+        "Pa_CloseStream=MOCK_Pa_CloseStream"
+        "Pa_GetStreamInfo=MOCK_Pa_GetStreamInfo"
+        "Pa_Initialize=MOCK_Pa_Initialize"
+    )
 
     target_link_libraries(amplitron-tests PRIVATE
         nlohmann_json::nlohmann_json

@@ -14,7 +14,7 @@ namespace Amplitron {
 
 std::string AudioEngine::get_input_device_name() const {
     if (input_device_ >= 0) {
-        const PaDeviceInfo* info = g_mock_pa_get_device_info ? g_mock_pa_get_device_info(input_device_) : Pa_GetDeviceInfo(input_device_);
+        const PaDeviceInfo* info = Pa_GetDeviceInfo(input_device_);
         if (info) return info->name;
     }
     return "None";
@@ -22,7 +22,7 @@ std::string AudioEngine::get_input_device_name() const {
 
 std::string AudioEngine::get_output_device_name() const {
     if (output_device_ >= 0) {
-        const PaDeviceInfo* info = g_mock_pa_get_device_info ? g_mock_pa_get_device_info(output_device_) : Pa_GetDeviceInfo(output_device_);
+        const PaDeviceInfo* info = Pa_GetDeviceInfo(output_device_);
         if (info) return info->name;
     }
     return "None";
@@ -30,9 +30,9 @@ std::string AudioEngine::get_output_device_name() const {
 
 std::vector<AudioDeviceInfo> AudioEngine::get_input_devices() const {
     std::vector<AudioDeviceInfo> devices;
-    int count = g_mock_pa_get_device_count ? g_mock_pa_get_device_count() : Pa_GetDeviceCount();
+    int count = Pa_GetDeviceCount();
     for (int i = 0; i < count; ++i) {
-        const PaDeviceInfo* info = g_mock_pa_get_device_info ? g_mock_pa_get_device_info(i) : Pa_GetDeviceInfo(i);
+        const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
         if (info && info->maxInputChannels > 0) {
             devices.push_back({
                 i, info->name,
@@ -47,9 +47,9 @@ std::vector<AudioDeviceInfo> AudioEngine::get_input_devices() const {
 
 std::vector<AudioDeviceInfo> AudioEngine::get_output_devices() const {
     std::vector<AudioDeviceInfo> devices;
-    int count = g_mock_pa_get_device_count ? g_mock_pa_get_device_count() : Pa_GetDeviceCount();
+    int count = Pa_GetDeviceCount();
     for (int i = 0; i < count; ++i) {
-        const PaDeviceInfo* info = g_mock_pa_get_device_info ? g_mock_pa_get_device_info(i) : Pa_GetDeviceInfo(i);
+        const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
         if (info && info->maxOutputChannels > 0) {
             devices.push_back({
                 i, info->name,
@@ -63,16 +63,16 @@ std::vector<AudioDeviceInfo> AudioEngine::get_output_devices() const {
 }
 
 bool AudioEngine::set_input_device(int device_index) {
-    const PaDeviceInfo* info = g_mock_pa_get_device_info ? g_mock_pa_get_device_info(device_index) : Pa_GetDeviceInfo(device_index);
+    const PaDeviceInfo* info = Pa_GetDeviceInfo(device_index);
     if (!info || info->maxInputChannels < 1) {
         last_error_ = "Invalid input device.";
         return false;
     }
 
     if (!devices_share_host_api(device_index, output_device_)) {
-        const PaDeviceInfo* out_info = g_mock_pa_get_device_info ? g_mock_pa_get_device_info(output_device_) : Pa_GetDeviceInfo(output_device_);
-        const PaHostApiInfo* in_api = g_mock_pa_get_host_api_info ? g_mock_pa_get_host_api_info(info->hostApi) : Pa_GetHostApiInfo(info->hostApi);
-        const PaHostApiInfo* out_api = out_info ? (g_mock_pa_get_host_api_info ? g_mock_pa_get_host_api_info(out_info->hostApi) : Pa_GetHostApiInfo(out_info->hostApi)) : nullptr;
+        const PaDeviceInfo* out_info = Pa_GetDeviceInfo(output_device_);
+        const PaHostApiInfo* in_api = Pa_GetHostApiInfo(info->hostApi);
+        const PaHostApiInfo* out_api = out_info ? Pa_GetHostApiInfo(out_info->hostApi) : nullptr;
         std::cerr << "[Amplitron] Warning: Input (" << (in_api ? in_api->name : "?")
                   << ") and output (" << (out_api ? out_api->name : "?")
                   << ") are on different host APIs. Stream may fail." << std::endl;
@@ -99,16 +99,16 @@ bool AudioEngine::set_input_device(int device_index) {
 }
 
 bool AudioEngine::set_output_device(int device_index) {
-    const PaDeviceInfo* info = g_mock_pa_get_device_info ? g_mock_pa_get_device_info(device_index) : Pa_GetDeviceInfo(device_index);
+    const PaDeviceInfo* info = Pa_GetDeviceInfo(device_index);
     if (!info || info->maxOutputChannels < 1) {
         last_error_ = "Invalid output device.";
         return false;
     }
 
     if (!devices_share_host_api(input_device_, device_index)) {
-        const PaDeviceInfo* in_info = g_mock_pa_get_device_info ? g_mock_pa_get_device_info(input_device_) : Pa_GetDeviceInfo(input_device_);
-        const PaHostApiInfo* in_api = in_info ? (g_mock_pa_get_host_api_info ? g_mock_pa_get_host_api_info(in_info->hostApi) : Pa_GetHostApiInfo(in_info->hostApi)) : nullptr;
-        const PaHostApiInfo* out_api = g_mock_pa_get_host_api_info ? g_mock_pa_get_host_api_info(info->hostApi) : Pa_GetHostApiInfo(info->hostApi);
+        const PaDeviceInfo* in_info = Pa_GetDeviceInfo(input_device_);
+        const PaHostApiInfo* in_api = in_info ? Pa_GetHostApiInfo(in_info->hostApi) : nullptr;
+        const PaHostApiInfo* out_api = Pa_GetHostApiInfo(info->hostApi);
         std::cerr << "[Amplitron] Warning: Input (" << (in_api ? in_api->name : "?")
                   << ") and output (" << (out_api ? out_api->name : "?")
                   << ") are on different host APIs. Stream may fail." << std::endl;
