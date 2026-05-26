@@ -333,9 +333,14 @@ void AudioGraph::restore_node(const DSPNode& node) {
 }
 
 void AudioGraph::restore_link(const GraphLink& link) {
+  int prev_next_id = next_id_;
   links_.push_back(link);
   if (link.id >= next_id_) next_id_ = link.id + 1;
-  rebuild_topology();
+  if (!rebuild_topology()) {
+      links_.pop_back();
+      next_id_ = prev_next_id;
+      rebuild_topology();
+  }
 }
 
 

@@ -22,7 +22,7 @@ struct AddGraphNodeCommand : public Command {
     AddGraphNodeCommand(AudioEngine& engine, const std::string& name, EffectType type, std::shared_ptr<Effect> pedal, ImVec2 pos)
         : engine_(engine), name(name), type(type), pedal(pedal), position(pos) {}
 
-    void execute() override {
+    bool execute() override {
         if (node_id == -1) {
             node_id = engine_.graph().add_node(name, type, pedal);
             auto* added_node = engine_.graph().find_node(node_id);
@@ -31,8 +31,14 @@ struct AddGraphNodeCommand : public Command {
             // Re-adding the previously deleted/undone node
             engine_.graph().restore_node(cached_node);
         }
-        GuiGraphState::get_instance().node_positions[node_id] = { position, false, ImVec2(0, 0) };
+        // Only write a fixed position when one was explicitly requested;
+        // if position is (0,0) the auto-placement logic in render_signal_chain
+        // will assign the correct cascading position on the next frame.
+        if (position.x != 0.0f || position.y != 0.0f) {
+            GuiGraphState::get_instance().node_positions[node_id] = { position, false, ImVec2(0, 0) };
+        }
         engine_.commit_graph_changes();
+        return true;
     }
 
     void undo() override {
@@ -55,7 +61,7 @@ struct RemoveGraphNodeCommand : public Command {
     RemoveGraphNodeCommand(AudioEngine& engine, NodeId id, EffectType t, ImVec2 pos)
         : engine_(engine), node_id(id), type(t), position(pos) {}
 
-    void execute() override {
+    bool execute() override {
         auto* node_to_remove = engine_.graph().find_node(node_id);
         if (node_to_remove) {
             cached_node = *node_to_remove;
@@ -73,6 +79,7 @@ struct RemoveGraphNodeCommand : public Command {
         engine_.graph().remove_node(node_id);
         GuiGraphState::get_instance().node_positions.erase(node_id);
         engine_.commit_graph_changes();
+        return true;
     }
 
     void undo() override {
@@ -100,7 +107,7 @@ struct AddGraphLinkCommand : public Command {
             link.id = -1; // Unknown until execute
         }
 
-    void execute() override {
+    bool execute() override {
         if (link.id == -1) {
             link.id = engine_.graph().add_link(link.source_pin_id, link.dest_pin_id);
             was_successful = (link.id != -1);
@@ -110,6 +117,7 @@ struct AddGraphLinkCommand : public Command {
         if (was_successful) {
             engine_.commit_graph_changes();
         }
+        return was_successful;
     }
 
     void undo() override {
@@ -129,9 +137,10 @@ struct RemoveGraphLinkCommand : public Command {
     RemoveGraphLinkCommand(AudioEngine& engine, const GraphLink& l)
         : engine_(engine), link(l) {}
 
-    void execute() override {
+    bool execute() override {
         engine_.graph().remove_link(link.id);
         engine_.commit_graph_changes();
+        return true;
     }
 
     void undo() override {
@@ -150,11 +159,12 @@ struct MoveGraphNodeCommand : public Command {
     MoveGraphNodeCommand(NodeId id, ImVec2 old_pos, ImVec2 new_pos)
         : node_id(id), old_pos(old_pos), new_pos(new_pos) {}
 
-    void execute() override {
+    bool execute() override {
         auto& positions = GuiGraphState::get_instance().node_positions;
         if (positions.count(node_id)) {
             positions[node_id].position = new_pos;
         }
+        return true;
     }
 
     void undo() override {

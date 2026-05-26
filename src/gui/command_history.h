@@ -11,7 +11,7 @@ namespace Amplitron {
  *
  * Provides execute(), undo(), redo(), and push_executed() operations.
  * Supports coalescing of rapid parameter changes and enforces a
- * configurable maximum history depth (default 50).
+ * configurable maximum history depth (default DEFAULT_MAX_DEPTH).
  */
 class CommandHistory {
 public:

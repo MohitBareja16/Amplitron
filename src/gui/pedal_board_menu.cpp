@@ -105,10 +105,10 @@ void PedalBoard::render_add_pedal_menu() {
     
         // --- NEW MODULAR DAG INSTANTIATION ENTRIES ---
         if (ImGui::MenuItem("+ Signal Splitter Node (1 In -> 2 Out)")) {
-            history_.execute(std::make_unique<AddGraphNodeCommand>(engine_, "Splitter", NodeRoutingType::Splitter, nullptr, ImVec2(40, 60)));
+            history_.execute(std::make_unique<AddGraphNodeCommand>(engine_, "Splitter", NodeRoutingType::Splitter, nullptr, ImVec2(0, 0)));
         }
         if (ImGui::MenuItem("+ Signal Mixer Node (2 In -> 1 Out)")) {
-            history_.execute(std::make_unique<AddGraphNodeCommand>(engine_, "Mixer", NodeRoutingType::Mixer, nullptr, ImVec2(40, 60)));
+            history_.execute(std::make_unique<AddGraphNodeCommand>(engine_, "Mixer", NodeRoutingType::Mixer, nullptr, ImVec2(0, 0)));
         }
 
         ImGui::EndPopup();
