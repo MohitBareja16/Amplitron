@@ -114,4 +114,7 @@ TEST(MoveGraphNodeCommand_executes_and_undoes_correctly) {
     history.redo();
     ASSERT_EQ(50.0f, state.node_positions[node_id].position.x);
     ASSERT_EQ(50.0f, state.node_positions[node_id].position.y);
+
+    // Cleanup singleton state
+    state.node_positions.erase(node_id);
 }

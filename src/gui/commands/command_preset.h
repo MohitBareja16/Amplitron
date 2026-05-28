@@ -5,7 +5,6 @@
 #include "gui/commands/command_base.h"
 #include <vector>
 #include <utility>
-#include <vector>
 
 namespace Amplitron {
 

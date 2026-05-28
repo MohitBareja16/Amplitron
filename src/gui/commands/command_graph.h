@@ -63,9 +63,9 @@ struct RemoveGraphNodeCommand : public Command {
 
     bool execute() override {
         auto* node_to_remove = engine_.graph().find_node(node_id);
-        if (node_to_remove) {
-            cached_node = *node_to_remove;
-        }
+        if (!node_to_remove) return false;
+        
+        cached_node = *node_to_remove;
 
         // Cache severed links before removal
         severed_links.clear();
@@ -109,6 +109,15 @@ struct AddGraphLinkCommand : public Command {
 
     bool execute() override {
         if (link.id == -1) {
+            bool already_exists = false;
+            for (const auto& l : engine_.graph().get_links()) {
+                if (l.source_pin_id == link.source_pin_id && l.dest_pin_id == link.dest_pin_id) {
+                    already_exists = true;
+                    break;
+                }
+            }
+            if (already_exists) return false;
+
             link.id = engine_.graph().add_link(link.source_pin_id, link.dest_pin_id);
             was_successful = (link.id != -1);
         } else if (was_successful) {
@@ -138,9 +147,11 @@ struct RemoveGraphLinkCommand : public Command {
         : engine_(engine), link(l) {}
 
     bool execute() override {
-        engine_.graph().remove_link(link.id);
-        engine_.commit_graph_changes();
-        return true;
+        bool success = engine_.graph().remove_link(link.id);
+        if (success) {
+            engine_.commit_graph_changes();
+        }
+        return success;
     }
 
     void undo() override {
@@ -161,9 +172,14 @@ struct MoveGraphNodeCommand : public Command {
 
     bool execute() override {
         auto& positions = GuiGraphState::get_instance().node_positions;
-        if (positions.count(node_id)) {
-            positions[node_id].position = new_pos;
+        auto it = positions.find(node_id);
+        if (it == positions.end()) return false;
+        
+        if (it->second.position.x == new_pos.x && it->second.position.y == new_pos.y) {
+            return false;
         }
+        
+        it->second.position = new_pos;
         return true;
     }
 
