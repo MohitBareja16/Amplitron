@@ -1,8 +1,8 @@
 #include "test_framework.h"
-#include "gui/command_graph.h"
-#include "gui/command_history.h"
-#include "audio/audio_engine.h"
-#include "gui/gui_graph_state.h"
+#include "gui/commands/command_graph.h"
+#include "gui/commands/command_history.h"
+#include "audio/engine/audio_engine.h"
+#include "gui/state/gui_graph_state.h"
 
 using namespace Amplitron;
 

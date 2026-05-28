@@ -4,8 +4,8 @@
 #include "gui/state/gui_graph_state.h"
 #include "preset_manager.h"
 #include "cli.h"
-#include "gui/command_graph.h"
-#include "gui/command_history.h"
+#include "gui/commands/command_graph.h"
+#include "gui/commands/command_history.h"
 
 #include "audio/effects/noise_gate.h"
 #include "audio/effects/compressor.h"
