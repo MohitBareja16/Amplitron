@@ -17,7 +17,7 @@
 #include "test_framework.h"
 #include "preset_json.h"
 #include "preset_manager.h"
-#include "audio/audio_engine.h"
+#include "audio/engine/audio_engine.h"
 #include <stdexcept>
 
 #include "audio/effects/noise_gate.h"

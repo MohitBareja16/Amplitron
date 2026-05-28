@@ -1,5 +1,5 @@
 #include "test_framework.h"
-#include "audio/recorder.h"
+#include "audio/recorder/recorder.h"
 
 #include <fstream>
 #include <cstdio>

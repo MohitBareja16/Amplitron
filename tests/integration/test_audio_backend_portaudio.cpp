@@ -1,5 +1,6 @@
-#include "audio/audio_backend_portaudio_helpers.h"
-#include "audio/audio_engine.h"
+#if !defined(WITH_JACK)
+#include "audio/backend/audio_backend_portaudio_helpers.h"
+#include "audio/engine/audio_engine.h"
 #include "test_framework.h"
 #include "../fixtures/portaudio_mock.cpp"
 
@@ -493,3 +494,9 @@ TEST(PortAudioDevices_DevicesCoverage) {
     MockGuard guard;
     Amplitron::PortAudioTestSaboteur::devices_coverage();
 }
+#else
+#include "test_framework.h"
+TEST(AudioBackend_PortAudio_NotAvailable) {
+  ASSERT_TRUE(true);
+}
+#endif
