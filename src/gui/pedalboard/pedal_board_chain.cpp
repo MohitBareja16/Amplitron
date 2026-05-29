@@ -149,6 +149,34 @@ void PedalBoard::render_signal_chain() {
   for (auto &pair : ui_state.node_positions) {
     if (!audio_graph.find_node(pair.first)) {
       stale_ids.push_back(pair.first);
+    auto& audio_graph = engine_.graph(); 
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
+    ImVec2 canvas_size = ImGui::GetContentRegionAvail();
+    ImVec2 canvas_end = ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y);
+    ui_state.last_canvas_pos = canvas_pos;
+    ImGui::SetCursorScreenPos(canvas_pos);
+    // Left mouse button always pans the canvas on empty space. Widgets (knobs,
+    // drag handles, pins) are rendered on top and capture clicks first — this
+    // InvisibleButton only receives clicks that fall through to empty canvas.
+    ImGuiButtonFlags btn_flags = ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle | ImGuiButtonFlags_MouseButtonLeft;
+    
+    ImGui::SetNextItemAllowOverlap();
+    ImGui::InvisibleButton("canvas_panning_hotspot", canvas_size, btn_flags);
+    // Update canvas_hovered here — after InvisibleButton — so it reflects the actual canvas item
+    ui_state.canvas_hovered = ImGui::IsItemHovered();
+    
+    // Show hand cursor only when hovering empty canvas (no widget underneath)
+    if (ImGui::IsItemHovered() && !ImGui::IsAnyItemHovered()) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+    }
+    
+    if (ImGui::IsItemActive() && (ImGui::IsMouseDragging(ImGuiMouseButton_Right) || 
+                                  ImGui::IsMouseDragging(ImGuiMouseButton_Middle) || 
+                                  ImGui::IsMouseDragging(ImGuiMouseButton_Left))) {
+        ui_state.scrolling.x += ImGui::GetIO().MouseDelta.x;
+        ui_state.scrolling.y += ImGui::GetIO().MouseDelta.y;
+        ui_state.target_scrolling = ui_state.scrolling;
     }
   }
   for (int id : stale_ids) {
@@ -278,6 +306,57 @@ void PedalBoard::render_signal_chain() {
             node_layout.position.y != node_layout.drag_start_pos.y) {
           history_.push_executed(std::make_unique<MoveGraphNodeCommand>(
               node.id, node_layout.drag_start_pos, node_layout.position));
+        float node_width = (target_widget ? (is_mb_comp ? 190.0f * 2.2f : 190.0f) : 110.0f) * ui_state.zoom;
+        float node_height = (target_widget ? 360.0f : 70.0f) * ui_state.zoom;
+        ImGui::PushID(node.id);
+        if (target_widget) {
+            ImGui::SetCursorScreenPos(node_screen_pos);
+            ImGui::BeginGroup();
+            ImGui::SetWindowFontScale(ui_state.zoom);
+            target_widget->render(ui_state.zoom); 
+            ImGui::SetWindowFontScale(1.0f);
+            ImGui::EndGroup();
+            ImGui::SetCursorScreenPos(node_screen_pos);
+            ImGui::SetNextItemAllowOverlap(); 
+            ImGui::InvisibleButton("native_drag_handle", ImVec2(node_width - 25.0f * ui_state.zoom, 30.0f * ui_state.zoom));
+            if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+                if (!node_layout.is_dragging) {
+                    node_layout.is_dragging = true;
+                    node_layout.drag_start_pos = node_layout.position;
+                }
+                node_layout.position.x += ImGui::GetIO().MouseDelta.x / ui_state.zoom;
+                node_layout.position.y += ImGui::GetIO().MouseDelta.y / ui_state.zoom;
+            } else if (node_layout.is_dragging && ImGui::IsItemDeactivated()) {
+                node_layout.is_dragging = false;
+                if (node_layout.position.x != node_layout.drag_start_pos.x || node_layout.position.y != node_layout.drag_start_pos.y) {
+                    history_.push_executed(std::make_unique<MoveGraphNodeCommand>(node.id, node_layout.drag_start_pos, node_layout.position));
+                }
+            }
+        } else {
+            ImVec2 node_end = ImVec2(node_screen_pos.x + node_width, node_screen_pos.y + node_height);
+            ImU32 bg_color = IM_COL32(50, 35, 60, 255);
+            draw_list->AddRectFilled(node_screen_pos, node_end, bg_color, Theme::ROUNDING_MD * ui_state.zoom);
+            draw_list->AddRect(node_screen_pos, node_end, IM_COL32(180, 140, 80, 180), Theme::ROUNDING_MD * ui_state.zoom, 0, 1.5f * ui_state.zoom);
+            ImGui::SetCursorScreenPos(node_screen_pos);
+            ImGui::SetNextItemAllowOverlap();
+            ImGui::InvisibleButton("util_drag_handle", ImVec2(node_width - 25.0f * ui_state.zoom, node_height));
+            if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+                if (!node_layout.is_dragging) {
+                    node_layout.is_dragging = true;
+                    node_layout.drag_start_pos = node_layout.position;
+                }
+                node_layout.position.x += ImGui::GetIO().MouseDelta.x / ui_state.zoom;
+                node_layout.position.y += ImGui::GetIO().MouseDelta.y / ui_state.zoom;
+            } else if (node_layout.is_dragging && ImGui::IsItemDeactivated()) {
+                node_layout.is_dragging = false;
+                if (node_layout.position.x != node_layout.drag_start_pos.x || node_layout.position.y != node_layout.drag_start_pos.y) {
+                    history_.push_executed(std::make_unique<MoveGraphNodeCommand>(node.id, node_layout.drag_start_pos, node_layout.position));
+                }
+            }
+            ImVec2 text_pos = ImVec2(node_screen_pos.x + 12.0f * ui_state.zoom, node_screen_pos.y + 25.0f * ui_state.zoom);
+            ImGui::SetWindowFontScale(ui_state.zoom);
+            draw_list->AddText(text_pos, IM_COL32(255, 255, 255, 255), node.name.c_str());
+            ImGui::SetWindowFontScale(1.0f);
         }
       }
 
